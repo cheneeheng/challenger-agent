@@ -1,0 +1,27 @@
+# name: CI
+
+# on:
+#   push:
+#     branches: [main]
+#   pull_request:
+
+# jobs:
+#   backend-tests:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@v3
+#       - uses: actions/setup-python@v4
+#         with:
+#           python-version: "3.11"
+#       - run: pip install -r backend/requirements.txt
+#       - run: pytest backend -q
+
+#   frontend-build:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@v3
+#       - uses: actions/setup-node@v3
+#         with:
+#           node-version: "18"
+#       - run: npm install --prefix frontend
+#       - run: npm run build --prefix frontend

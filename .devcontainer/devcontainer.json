@@ -1,0 +1,47 @@
+{
+  "name": "Challenger Agent",
+
+  "build": {
+    // Path is relative to the devcontainer.json file.
+    "dockerfile": "Dockerfile",
+    "options": ["--tag=challenger-agent:260131"]
+  },
+
+  "containerEnv": {
+    "UV_CACHE_DIR": "/workspace/.uv-cache"
+  },
+
+  // Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
+  "remoteUser": "ubuntu",
+
+  "mounts": [
+    "source=${localEnv:USERPROFILE}/.gemini,target=/home/ubuntu/.gemini,type=bind"
+  ],
+
+  // This is where your source code will be mounted.
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
+  "workspaceFolder": "/workspace",
+
+  "postStartCommand": "uv sync --directory backend --no-install-project --all-extras && bun install --cwd frontend",
+
+  "forwardPorts": [8000, 5173],
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.debugpy",
+        "ms-python.vscode-pylance",
+        "ms-azuretools.vscode-docker",
+        "ms-vscode.makefile-tools",
+        "njpwerner.autodocstring",
+        "tamasfe.even-better-toml",
+        "charliermarsh.ruff",
+        "google.geminicodeassist",
+        "esbenp.prettier-vscode",
+        "github.vscode-github-actions",
+        "svelte.svelte-vscode"
+      ]
+    }
+  }
+}

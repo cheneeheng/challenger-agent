@@ -1,0 +1,38 @@
+{
+    "terminal.integrated.defaultProfile.linux": "bash",
+    "terminal.integrated.env.linux": {
+        "PYTHONPATH": "/workspace/backend"
+    },
+    "diffEditor.renderSideBySide": true,
+    "editor.rulers": [
+        80
+    ],
+    "editor.minimap.maxColumn": 80,
+    "[dockerfile]": {
+        "editor.defaultFormatter": "ms-azuretools.vscode-containers"
+    },
+    "[python]": {
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+            "source.fixAll": "explicit",
+            "source.organizeImports": "explicit"
+        },
+        "editor.defaultFormatter": "charliermarsh.ruff"
+    },
+    "python.defaultInterpreterPath": "/workspace/backend/.venv/bin/python3",
+    "python.analysis.autoImportCompletions": true,
+    "python.analysis.autoFormatStrings": true,
+    "python.analysis.typeCheckingMode": "standard",
+    "editor.wordWrap": "on",
+    "python.testing.pytestArgs": [
+        "backend/tests"
+    ],
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestEnabled": true,
+    "ruff.interpreter": [
+        "/workspace/backend/.venv/bin/python3"
+    ],
+	"files.associations": {
+		"*.css": "tailwindcss"
+	}
+}

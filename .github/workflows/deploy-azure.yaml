@@ -1,0 +1,36 @@
+name: Deploy to Azure Container Apps
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Image tag (defaults to commit SHA)"
+        required: false
+
+# Required repository secrets:
+#   AZURE_CREDENTIALS    — Service principal JSON from:
+#                          az ad sp create-for-rbac --role contributor \
+#                            --scopes /subscriptions/<id>/resourceGroups/<rg> \
+#                            --sdk-auth
+#   RESOURCE_GROUP       — Azure resource group
+#   APP_NAME             — Application name (alphanumeric, no hyphens in ACR name)
+#   LOCATION             — Azure region (e.g. eastus)
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      APP_NAME: ${{ secrets.APP_NAME }}
+      RESOURCE_GROUP: ${{ secrets.RESOURCE_GROUP }}
+      LOCATION: ${{ secrets.LOCATION }}
+      IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Run deploy script
+        run: bash deploy/azure/deploy.sh

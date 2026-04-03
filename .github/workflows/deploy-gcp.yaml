@@ -1,0 +1,96 @@
+name: Deploy to GCP Cloud Run
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Image tag (defaults to commit SHA)"
+        required: false
+
+# Required repository secrets:
+#   GCP_PROJECT          — GCP project ID
+#   GCP_SA_KEY           — Service account JSON key with roles:
+#                           Artifact Registry Writer
+#                           Cloud Run Admin
+#                           Service Account User
+#   APP_NAME             — Application name (used for service names)
+#   GCP_REGION           — GCP region (e.g. us-central1)
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
+      APP_NAME: ${{ secrets.APP_NAME }}
+      GCP_REGION: ${{ secrets.GCP_REGION }}
+      IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker "$GCP_REGION-docker.pkg.dev" --quiet
+
+      - name: Build and push backend
+        run: |
+          REGISTRY="$GCP_REGION-docker.pkg.dev/$GCP_PROJECT/$APP_NAME"
+          docker build --platform linux/amd64 \
+            -t "$REGISTRY/backend:$IMAGE_TAG" \
+            -t "$REGISTRY/backend:latest" \
+            -f infra/Dockerfile.backend backend/
+          docker push "$REGISTRY/backend:$IMAGE_TAG"
+          docker push "$REGISTRY/backend:latest"
+
+      - name: Build and push frontend
+        run: |
+          REGISTRY="$GCP_REGION-docker.pkg.dev/$GCP_PROJECT/$APP_NAME"
+          docker build --platform linux/amd64 \
+            -t "$REGISTRY/frontend:$IMAGE_TAG" \
+            -t "$REGISTRY/frontend:latest" \
+            -f infra/Dockerfile.frontend frontend/
+          docker push "$REGISTRY/frontend:$IMAGE_TAG"
+          docker push "$REGISTRY/frontend:latest"
+
+      - name: Deploy backend to Cloud Run
+        run: |
+          REGISTRY="$GCP_REGION-docker.pkg.dev/$GCP_PROJECT/$APP_NAME"
+          gcloud run deploy "$APP_NAME-backend" \
+            --image "$REGISTRY/backend:$IMAGE_TAG" \
+            --platform managed \
+            --region "$GCP_REGION" \
+            --project "$GCP_PROJECT" \
+            --port 8000 \
+            --allow-unauthenticated \
+            --set-env-vars "APP_ENV=production"
+
+      - name: Deploy frontend to Cloud Run
+        run: |
+          REGISTRY="$GCP_REGION-docker.pkg.dev/$GCP_PROJECT/$APP_NAME"
+          BACKEND_URL=$(gcloud run services describe "$APP_NAME-backend" \
+            --platform managed --region "$GCP_REGION" --project "$GCP_PROJECT" \
+            --format "value(status.url)")
+
+          gcloud run deploy "$APP_NAME-frontend" \
+            --image "$REGISTRY/frontend:$IMAGE_TAG" \
+            --platform managed \
+            --region "$GCP_REGION" \
+            --project "$GCP_PROJECT" \
+            --port 3000 \
+            --allow-unauthenticated \
+            --set-env-vars "PUBLIC_API_BASE_URL=$BACKEND_URL"
+
+          FRONTEND_URL=$(gcloud run services describe "$APP_NAME-frontend" \
+            --platform managed --region "$GCP_REGION" --project "$GCP_PROJECT" \
+            --format "value(status.url)")
+
+          gcloud run services update "$APP_NAME-frontend" \
+            --platform managed --region "$GCP_REGION" --project "$GCP_PROJECT" \
+            --update-env-vars "ORIGIN=$FRONTEND_URL"
+
+          echo "Frontend deployed: $FRONTEND_URL"

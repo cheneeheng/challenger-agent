@@ -579,7 +579,7 @@ sqlalchemy.url = postgresql+asyncpg://placeholder
 | Graph size | ≤200 nodes / ≤400 edges — Pydantic field_validator |
 | Model | ALLOWED_MODELS allowlist in Pydantic field_validator |
 | Rate limiting | slowapi: /auth 5/15min IP; /api/chat 30/min user; /api/sessions 60/min user |
-| CORS | FRONTEND_URL only; allow_credentials=True |
+| CORS | FRONTEND_URLS list; allow_credentials=True (dev: both ports 3000+3001; prod: single domain) |
 | Headers | X-Content-Type-Options, X-Frame-Options, Referrer-Policy, HSTS (prod) |
 | Middleware order | SecurityHeaders → CORS → routes (CORS must be inner to handle OPTIONS) |
 | Session ownership | 403 (not 404) when resource exists but belongs to another user |
@@ -587,11 +587,12 @@ sqlalchemy.url = postgresql+asyncpg://placeholder
 | Concurrent send | isStreaming guard blocks second message at UI level |
 | Account delete | Password confirmation + cascade |
 
-CORS `allow_origins` in development includes both:
+CORS `allow_origins` is driven by `settings.FRONTEND_URLS` (a `list[str]` field in `app/config.py`).
+Default covers both dev frontends:
 ```python
 allow_origins=["http://localhost:3000", "http://localhost:3001"]
 ```
-In production, set to only the single deployed frontend origin.
+In production, set `FRONTEND_URLS` to only the single deployed frontend origin (e.g. `https://idealens.app`).
 
 ---
 

@@ -55,7 +55,10 @@ class Settings(BaseSettings):
     API_KEY_ENCRYPTION_KEY: str
 
     # App
-    FRONTEND_URL: str
+    # Comma-separated list of allowed CORS origins.
+    # Development: set to "http://localhost:3000,http://localhost:3001" to allow both frontends.
+    # Production: set to your production domain (e.g. "https://idealens.app").
+    FRONTEND_URLS: list[str] = ["http://localhost:3000", "http://localhost:3001"]
     ENVIRONMENT: str = "development"    # "development" | "production"
 
     # LLM
@@ -86,7 +89,7 @@ DATABASE_URL=postgresql+asyncpg://idealens:idealens@localhost:5432/idealens
 JWT_SECRET=change-me-generate-with-secrets-token-hex-64
 JWT_ALGORITHM=HS256
 API_KEY_ENCRYPTION_KEY=  # python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-FRONTEND_URL=http://localhost:3000
+FRONTEND_URLS=http://localhost:3000,http://localhost:3001  # dev: both frontends; prod: your domain only
 ENVIRONMENT=development
 TEST_DATABASE_URL=postgresql+asyncpg://idealens:idealens@localhost:5432/idealens_test
 SEED_ANTHROPIC_API_KEY=  # optional
@@ -139,7 +142,7 @@ def create_app() -> FastAPI:
     # Therefore add CORS first, SecurityHeaders second:
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[settings.FRONTEND_URL],
+        allow_origins=settings.FRONTEND_URLS,   # list — covers both dev frontends + prod domain
         allow_credentials=True,     # required for httpOnly cookie to be sent
         allow_methods=["*"],
         allow_headers=["*"],

@@ -111,8 +111,12 @@ volumes:
   ```
 - [ ] Configure `apps/web-react/vite.config.ts`:
   ```typescript
+  import { defineConfig } from 'vite'
+  import react from '@vitejs/plugin-react'
+  import tailwindcss from '@tailwindcss/vite'
+
   export default defineConfig({
-    plugins: [react()],
+    plugins: [react(), tailwindcss()],
     server: {
       host: '0.0.0.0',
       port: 3000,
@@ -161,7 +165,7 @@ volumes:
 - [ ] Create `app/config.py` — pydantic-settings `Settings` with `get_settings()` lru_cache singleton (see 06_BACKEND_IMPLEMENTATION.md §2 for full class)
 - [ ] Create `app/main.py` — `create_app()` factory; middleware order is critical:
   1. `SecurityHeadersMiddleware` added first (outermost)
-  2. `CORSMiddleware` added second — must be before security headers or OPTIONS preflight fails; `allow_origins` must include both frontend origins (`http://localhost:3000` and `http://localhost:3001`) in development
+  2. `CORSMiddleware` added second — must be before security headers or OPTIONS preflight fails; `allow_origins` reads from `settings.FRONTEND_URLS` (a list — see 06_BACKEND_IMPLEMENTATION.md §2); default covers both dev frontends (`http://localhost:3000` and `http://localhost:3001`)
   3. `slowapi` limiter added to `app.state`
   4. Routers included last
 - [ ] Add `GET /health` endpoint

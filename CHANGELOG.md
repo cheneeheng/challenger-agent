@@ -6,6 +6,26 @@ Format: `[version] YYYY-MM-DD — description`
 
 ---
 
+## [0.3.1] 2026-04-05 — Bug fixes, test coverage to 99%, and frontend unit tests
+
+### Fixed
+- **`backend/tests/conftest.py`** — Test `AsyncSession` was missing `expire_on_commit=False`, which the production `AsyncSessionLocal` has. The divergence caused `MissingGreenlet` errors in `test_chat_context_summarization` (the only test that triggered `db.commit()` mid-request). Added `expire_on_commit=False` to match production behaviour.
+- **`backend/app/api/routes/chat.py`** — `messages`, `context_summary`, and `context_summary_covers_up_to` are now captured into local Python variables before `db.commit()`. This prevents expired-attribute lazy loads when `build_messages` accesses those values after the commit inside the `StreamingResponse` generator.
+- **`backend/pyproject.toml`** — Removed `"asyncio"` from `[tool.coverage.run] concurrency`. `asyncio` is not a valid coverage.py concurrency option; its presence caused `ConfigError: Unknown concurrency choices: asyncio` and crashed pytest on startup.
+
+### Added
+- **`frontend/src/lib/stores/graphStore.test.ts`** — 21 vitest unit tests covering all graphStore mutation methods (`addNode`, `updateNode`, `deleteNode`, `addEdge`, `deleteEdge`, `setNodePosition`, `setGraph`, `clearGraph`, `getSnapshot`) and all four `applyGraphActions` action types (`add`, `update`, `delete`, `connect`), including edge cases (duplicate IDs, protected root node, duplicate edges).
+- **`frontend/src/lib/stores/chatStore.test.ts`** — 11 vitest unit tests covering `addMessage`, `setMessages`, `appendToken` (streaming and non-streaming targets), `finalizeMessage`, `setStreaming`, `setError`, and `clear`.
+- **`frontend/src/lib/utils/debounce.test.ts`** — 4 vitest unit tests with fake timers verifying the trailing-call debounce contract.
+- **`frontend/src/lib/utils/graphLayout.test.ts`** — 6 vitest unit tests for `applyDagreLayout`: node count preserved, `userPositioned` nodes kept at their coordinates, non-user-positioned nodes receive Dagre-assigned positions, empty graph handled, edges involving user-positioned nodes skipped.
+- **`frontend/src/lib/schemas/graph.test.ts`** — 19 vitest unit tests for all Zod schemas: `dimensionTypeSchema` (all 10 valid types + rejection), `analysisNodeSchema` (default `userPositioned`, required fields, numeric score), `analysisEdgeSchema` (minimal + optional fields), `analysisGraphSchema`, `llmGraphActionSchema` (all 4 discriminated union branches + rejection).
+
+### Changed
+- **`docs/plan/02_TODOS.md`** — Full audit against implemented code. All completed backend and SvelteKit tasks marked `[x]`, React-only tasks marked `[-]` (N/A), remaining items left `[ ]` with accurate descriptions.
+- **`README.md`** — Complete rewrite to reflect IdeaLens application. Covers features, quick start, environment variables, command reference, annotated project structure, test coverage stats, architecture notes (streaming, graph actions, context management, API key security, auth), and a "what's not yet built" section pointing to `docs/plan/02_TODOS.md`.
+
+---
+
 ## [0.3.0] 2026-04-04 — IdeaLens application: full backend and frontend implementation
 
 ### Added

@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel, field_validator
 
 from app.schemas.graph import AnalysisGraph
@@ -25,6 +27,6 @@ class MessageResponse(BaseModel):
     role: str
     content: str
     message_index: int
-    created_at: str
+    created_at: datetime
 
     model_config = {"from_attributes": True}

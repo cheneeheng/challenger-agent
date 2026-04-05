@@ -1,9 +1,8 @@
-# {{ project_name }}
+# IdeaLens
 
-> Template version: 0.2.2
-
-A production-ready project template for building full-stack applications with
-FastAPI and SvelteKit.
+An LLM-powered idea analysis tool. Describe any idea in natural language; Claude builds a live
+knowledge graph — nodes for concepts, requirements, benefits, flaws, gaps, alternatives — while
+you chat. Edit nodes directly, ask follow-up questions, and watch the graph evolve in real time.
 
 ---
 
@@ -12,72 +11,95 @@ FastAPI and SvelteKit.
 | Layer | Technology |
 |---|---|
 | Backend | FastAPI, Python 3.12, `uv` |
-| Frontend | SvelteKit 2, Svelte 5, TypeScript strict, TailwindCSS 4, Vite 7 |
-| Runtime | Node.js 24 (via `adapter-node`) |
+| Frontend | SvelteKit 2, Svelte 5 (runes), TypeScript strict, TailwindCSS 4, Vite 7 |
+| Graph | @xyflow/svelte 1.5.2 + Dagre auto-layout |
+| Database | PostgreSQL 16, SQLAlchemy 2 async, asyncpg, Alembic |
+| Auth | JWT access tokens + httpOnly refresh cookie, bcrypt |
+| LLM | Anthropic SDK (user-supplied API key, encrypted at rest with Fernet) |
 | Containerisation | Docker, Docker Compose |
 | CI | GitHub Actions |
 | Dev environment | VS Code devcontainer (Ubuntu 24.04) |
 
 ---
 
-## Using this template
+## Features
 
-### 1. Create your repository
+- **Streaming analysis** — Claude streams tokens and graph actions over SSE in real time
+- **Live knowledge graph** — nodes auto-positioned with Dagre layout after each response
+- **10 node types** — concept, requirement, benefit, drawback, gap, flaw, feasibility, alternative, question, root
+- **Session persistence** — graph state, chat history, and model selection saved to PostgreSQL
+- **Context window management** — older messages auto-summarised when session grows large
+- **SSE reconnection** — `Last-Event-ID` replay on reconnect
+- **User API key** — each user supplies their own Anthropic key; stored Fernet-encrypted, decrypted only in memory
+- **Multi-model** — Haiku (fast), Sonnet (default), Opus (thorough)
+- **Settings** — profile, password, API key management, account deletion
 
-On GitHub, click **Use this template → Create a new repository**.
+---
 
-Or clone manually:
+## Quick start (devcontainer)
 
 ```bash
-git clone https://github.com/your-org/template-fastapi-sveltekit my-project
-cd my-project
-git remote set-url origin https://github.com/your-org/my-project
+# 1. Open in VS Code devcontainer (auto-installs all deps)
+
+# 2. Start PostgreSQL (first time only; survives container rebuild)
+sudo service postgresql start
+
+# 3. Apply DB migrations
+cd backend && uv run alembic upgrade head
+
+# 4. Copy and fill in environment variables
+cp backend/.env.example backend/.env
+# Required: JWT_SECRET, API_KEY_ENCRYPTION_KEY, DATABASE_URL
+
+# 5. Run backend + frontend in parallel
+make dev
 ```
 
-### 2. Replace placeholders
+Backend on `:8000`, frontend on `:5173`.
 
-Search for `{{ }}` tokens and replace them:
+---
 
-| Token | File | Replace with |
+## Environment variables
+
+| Variable | Where | Notes |
 |---|---|---|
-| `{{ project_name }}` | `README.md` | Your project name |
-| `{{ author_name }}` | `backend/pyproject.toml` | Your name |
-| `author@example.com` | `backend/pyproject.toml` | Your actual email |
+| `DATABASE_URL` | backend | `postgresql+asyncpg://user:pass@host/db` |
+| `JWT_SECRET` | backend | Min 32 chars. Generate: `openssl rand -hex 32` |
+| `API_KEY_ENCRYPTION_KEY` | backend | Fernet key. Generate: `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` |
+| `ENVIRONMENT` | backend | `development` (default) or `production` |
+| `FRONTEND_URLS_RAW` | backend | Comma-separated allowed CORS origins. Default: `http://localhost:5173` |
+| `CONTEXT_WINDOW_MAX_MESSAGES` | backend | Messages before summarisation kicks in. Default: `20` |
+| `PUBLIC_API_URL` | frontend | Backend base URL. Default: `http://localhost:8000` |
 
-Also rename the packages themselves:
+---
 
-```bash
-# backend/pyproject.toml
-name = "my-project"            # was "backend"
-
-# frontend/package.json
-"name": "my-project"           # was "frontend"
-```
-
-### 3. Set up environment variables
+## Commands
 
 ```bash
-cp .env.example .env
-# Edit .env — at minimum set SECRET_KEY
-openssl rand -hex 32           # generates a secure SECRET_KEY
-```
+# Backend (from repo root)
+make dev        # backend + frontend in parallel
+make backend    # backend only (port 8000, hot reload)
+make frontend   # frontend only (port 5173, hot reload)
+make test       # pytest (quiet)
 
-### 4. Open in devcontainer
+# Backend — from backend/
+uv run pytest                          # all tests
+uv run pytest tests/path/test.py::fn  # single test
+uv run pytest --no-cov                # skip coverage
+uv run alembic upgrade head            # apply migrations
+uv run alembic revision --autogenerate -m "description"
+ruff check .                          # lint
+ruff format .                         # format
 
-Open the repo in VS Code and click **Reopen in Container** when prompted.
+# Frontend — from frontend/
+bun run dev           # dev server
+bun run build         # production build
+bun run check         # svelte-check + tsc
+bun run test          # vitest (run once)
+bun run test:coverage # with coverage report
 
-The devcontainer will automatically:
-- Install Python 3.12 + `uv` and sync backend dependencies
-- Install Node.js 24 + Bun and install frontend dependencies
-- Install Claude Code CLI globally
-- Configure all VS Code extensions (Ruff, Svelte, Pylance, etc.)
-
-### 5. Start developing
-
-```bash
-make dev        # backend on :8000 + frontend on :5173 (parallel)
-make backend    # backend only
-make frontend   # frontend only
+# Pre-commit
+pre-commit run --all-files
 ```
 
 ---
@@ -89,183 +111,132 @@ make frontend   # frontend only
 ├── backend/
 │   ├── app/
 │   │   ├── api/
-│   │   │   ├── routes/         # Route handlers — one file per domain
-│   │   │   └── deps.py         # FastAPI dependency injection
+│   │   │   ├── routes/         # auth, users, sessions, chat, models
+│   │   │   └── deps.py
 │   │   ├── core/
-│   │   │   ├── config.py       # Settings via pydantic-settings (.env)
-│   │   │   └── security.py     # Auth/JWT helpers (add when needed)
-│   │   ├── services/           # Business logic — called by routes
-│   │   ├── models/             # SQLAlchemy ORM models (add when needed)
-│   │   ├── schemas/            # Pydantic request/response schemas
+│   │   │   └── config.py       # pydantic-settings Settings (get_settings lru_cache)
 │   │   ├── db/
-│   │   │   ├── session.py      # Async DB session factory (add when needed)
-│   │   │   └── base.py         # Declarative base (add when needed)
-│   │   └── main.py             # FastAPI app, middleware, lifespan
-│   ├── tests/
-│   │   ├── conftest.py         # pytest fixtures (TestClient)
-│   │   └── test_main.py        # Health endpoint smoke test
-│   └── pyproject.toml          # Dependencies, Ruff, pytest config
+│   │   │   ├── models/         # User, RefreshToken, Session, Message
+│   │   │   ├── base.py         # async engine + AsyncSessionLocal
+│   │   │   └── session.py      # get_db dependency
+│   │   ├── dependencies/
+│   │   │   └── auth.py         # get_current_user
+│   │   ├── prompts/
+│   │   │   └── analysis_system.py  # Claude system prompt
+│   │   ├── schemas/            # Pydantic schemas: auth, user, session, chat, graph
+│   │   ├── services/           # auth_service, encryption_service, llm_service
+│   │   └── main.py             # create_app() factory, middleware, lifespan
+│   ├── alembic/                # Async Alembic config + migrations
+│   ├── tests/                  # 98 tests, 99% coverage
+│   │   ├── conftest.py         # NullPool per-test engine, SAVEPOINT isolation
+│   │   ├── test_auth.py
+│   │   ├── test_users.py
+│   │   ├── test_sessions.py
+│   │   ├── test_chat.py
+│   │   ├── test_services.py
+│   │   └── test_schemas.py
+│   └── pyproject.toml
 │
 ├── frontend/
 │   ├── src/
-│   │   ├── routes/             # File-based routing (+page.svelte, +layout.svelte)
-│   │   ├── lib/
-│   │   │   ├── api/            # Typed fetch wrappers for the backend
-│   │   │   ├── components/     # Reusable Svelte components
-│   │   │   └── stores/         # Svelte stores (shared state)
-│   │   └── app.d.ts            # Global TypeScript declarations
-│   ├── package.json
-│   ├── svelte.config.js        # adapter-node for Docker/Node deployments
-│   └── vite.config.ts          # Vite + Tailwind + vitest config
+│   │   ├── routes/
+│   │   │   ├── +layout.ts              # SPA mode (ssr = false)
+│   │   │   ├── login/                  # login page
+│   │   │   ├── register/               # register page
+│   │   │   └── (protected)/
+│   │   │       ├── +layout.ts          # auth guard
+│   │   │       ├── settings/           # profile, API key, password, delete account
+│   │   │       └── (requires-api-key)/
+│   │   │           ├── +layout.ts      # API key guard
+│   │   │           ├── +page.svelte    # dashboard (session list + new analysis)
+│   │   │           └── session/[id]/   # workspace: chat + graph
+│   │   └── lib/
+│   │       ├── components/
+│   │       │   ├── chat/               # ChatPanel, ChatInput, MessageBubble, ModelSelector
+│   │       │   ├── graph/              # GraphPanel, GraphToolbar, NodeDetailPanel, AnalysisNodeComponent
+│   │       │   └── layout/             # AppHeader, SplitLayout
+│   │       ├── schemas/
+│   │       │   └── graph.ts            # Zod schemas for graph types and LLM actions
+│   │       ├── services/               # authService, userService, sessionService, chatService
+│   │       ├── stores/                 # authStore, chatStore, graphStore, sessionStore
+│   │       └── utils/                  # graphLayout (Dagre), graphStyles, debounce
+│   └── src/lib/example.test.ts         # 62 tests across stores, schemas, utils
 │
 ├── infra/
-│   ├── docker-compose.yaml     # Production container orchestration
-│   ├── Dockerfile.backend      # Multi-layer Python/uv image
+│   ├── Dockerfile.backend      # Multi-stage Python/uv image
 │   └── Dockerfile.frontend     # Multi-stage Bun builder + Node runner
 │
 ├── deploy/
-│   ├── README.md               # Deployment guide
 │   ├── aws/deploy.sh           # ECR + App Runner
 │   ├── gcp/deploy.sh           # Artifact Registry + Cloud Run
 │   └── azure/deploy.sh         # ACR + Container Apps
 │
-├── .devcontainer/              # VS Code devcontainer (Ubuntu 24.04)
-├── .github/workflows/          # CI (ci.yaml) + deploy per provider
-├── .env.example                # Environment variable reference
-├── MAINTENANCE.md              # What to update regularly
-└── Makefile                    # dev / backend / frontend / test
+├── docker-compose.yml          # PostgreSQL for local dev + test DB init
+├── .github/workflows/          # ci.yaml + deploy-{aws,gcp,azure}.yaml
+├── Makefile
+└── docs/plan/                  # Architecture, todos, implementation plans
 ```
 
 ---
 
-## Development
+## Test coverage
 
-### Running tests
+```
+Backend:  98 tests · 99% coverage
+Frontend: 62 tests (stores, schemas, utilities)
+```
+
+Run backend coverage report:
 
 ```bash
-# Backend (from repo root)
-make test
-
-# Backend with coverage
-cd backend && pytest --cov
-
-# Frontend
-cd frontend && bun run test
-cd frontend && bun run test:coverage
+cd backend && uv run pytest
 ```
-
-### Code quality
-
-```bash
-# Backend lint + format
-ruff check backend/
-ruff format backend/
-ruff check --fix backend/
-
-# Frontend type-check
-cd frontend && bun run check
-
-# Run all pre-commit hooks
-pre-commit run --all-files
-```
-
-### Adding a backend route
-
-1. Create `backend/app/api/routes/my_domain.py`
-2. Define a router and handlers — routes call services, not models directly
-3. Register the router in `backend/app/main.py`
-
-```python
-# backend/app/api/routes/items.py
-from fastapi import APIRouter
-
-router = APIRouter(prefix="/items", tags=["items"])
-
-@router.get("/")
-def list_items():
-    return []
-```
-
-```python
-# backend/app/main.py
-from app.api.routes import items
-app.include_router(items.router)
-```
-
-### Adding a frontend page
-
-Create `frontend/src/routes/my-page/+page.svelte`. SvelteKit uses file-based routing.
-
-Use `$props()`, `$state()`, `$derived()` — this template uses **Svelte 5 runes** syntax throughout.
-
-### Adding environment variables
-
-1. Add to `.env.example` with a comment explaining the value
-2. Add to `backend/app/core/config.py` (`Settings` class) for backend vars
-3. For frontend public vars, prefix with `PUBLIC_` — SvelteKit exposes these automatically
 
 ---
 
-## Docker
+## Architecture notes
 
-### Build and run locally
+**Streaming:** `POST /api/chat` returns a `StreamingResponse`. A queue-based producer/consumer pattern runs the LLM call and a 15-second heartbeat ping concurrently. The frontend SSE parser handles `token`, `graph_action`, `ping`, `error`, and `done` events.
 
-```bash
-cp .env.example .env    # fill in values first
+**Graph actions:** The LLM returns a structured `LLMResponse` with a `graph_actions` array. Each action is Pydantic-validated against a discriminated union (`add`, `update`, `delete`, `connect`). Actions are streamed as `graph_action` SSE events; the frontend applies them to the graphStore and re-runs Dagre layout on completion.
 
-cd infra
-docker compose up --build
-```
+**Context management:** When `session.messages` exceeds `CONTEXT_WINDOW_MAX_MESSAGES`, the oldest messages are summarised with `claude-haiku-4-5` and stored in `session.context_summary`. Subsequent LLM calls inject the summary as a user/assistant context pair.
 
-Backend serves on `:8000`, frontend on `:3000` (production build via Node). During local development with `make dev`, the frontend runs on `:5173` via the Vite dev server instead.
+**API key security:** User Anthropic keys are encrypted with Fernet before DB storage. The raw key exists only in memory during the LLM call. Keys are validated against the Anthropic API on first save.
 
-### Production images
+**Auth:** Short-lived JWT access tokens (15 min) + long-lived httpOnly refresh cookie (7 days). Refresh tokens are stored in the DB for revocation. The refresh cookie is scoped to `/auth` path to limit exposure.
 
-Both Dockerfiles are production-ready:
+---
 
-- **`Dockerfile.backend`** — uses `uv` for fast, reproducible installs; installs deps before copying source for layer caching
-- **`Dockerfile.frontend`** — multi-stage: Bun builder → slim Node runner; only the compiled `build/` output is in the final image
+## What's not yet built
+
+See [`docs/plan/02_TODOS.md`](docs/plan/02_TODOS.md) for the full status. Key remaining items:
+
+- Rate limit decorators on individual routes (slowapi is wired, not applied)
+- Graph → Chat feedback loop (system messages when user edits nodes manually)
+- Graph toolbar: Add Node, Add Edge, Delete Selected actions
+- Node right-click context menu
+- Graph animations (node enter/exit transitions)
+- Dashboard pagination and delete undo
+- Terraform infrastructure
+- E2E Playwright tests
 
 ---
 
 ## Deployment
 
-See [`deploy/README.md`](deploy/README.md) for full instructions.
+See [`deploy/README.md`](deploy/README.md). GitHub Actions workflows for AWS, GCP, and Azure are in `.github/workflows/`.
 
 ```bash
-export APP_NAME=myapp
-
 # GCP Cloud Run
-export GCP_PROJECT=my-gcp-project
+export APP_NAME=idealens GCP_PROJECT=my-project
 bash deploy/gcp/deploy.sh
 
 # AWS App Runner
-export AWS_REGION=us-east-1
+export APP_NAME=idealens AWS_REGION=us-east-1
 bash deploy/aws/deploy.sh
 
 # Azure Container Apps
-export RESOURCE_GROUP=myapp-rg
+export APP_NAME=idealens RESOURCE_GROUP=idealens-rg
 bash deploy/azure/deploy.sh
 ```
-
-GitHub Actions workflows for each provider live in `.github/workflows/deploy-*.yaml` and are triggered manually via `workflow_dispatch`. Change the trigger to `push: branches: [main]` to enable auto-deploy on merge.
-
----
-
-## Configuration reference
-
-| Variable | Service | Default | Notes |
-|---|---|---|---|
-| `APP_ENV` | backend | `development` | Set to `production` in prod |
-| `SECRET_KEY` | backend | `changeme` | Generate: `openssl rand -hex 32` |
-| `CORS_ORIGINS` | backend | `http://localhost:5173` | Comma-separated list |
-| `DATABASE_URL` | backend | — | Add when using a DB |
-| `ORIGIN` | frontend | — | Required by adapter-node in production |
-| `PUBLIC_API_BASE_URL` | frontend | — | Full URL of the backend |
-
----
-
-## Maintenance
-
-See [`MAINTENANCE.md`](MAINTENANCE.md) for a checklist of things to update periodically:
-Python version, backend/frontend dependency upgrades, pre-commit hook versions, Node version, and GitHub Actions action pins.

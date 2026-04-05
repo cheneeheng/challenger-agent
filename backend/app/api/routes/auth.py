@@ -61,7 +61,7 @@ async def register(
 
     settings = get_settings()
     refresh_token = create_refresh_token(user.id)
-    expires_at = datetime.now(timezone.utc) + timedelta(
+    expires_at = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(
         days=settings.REFRESH_TOKEN_EXPIRE_DAYS
     )
     db.add(RefreshToken(token=refresh_token, user_id=user.id, expires_at=expires_at))
@@ -86,7 +86,7 @@ async def login(
 
     settings = get_settings()
     refresh_token = create_refresh_token(user.id)
-    expires_at = datetime.now(timezone.utc) + timedelta(
+    expires_at = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(
         days=settings.REFRESH_TOKEN_EXPIRE_DAYS
     )
     db.add(RefreshToken(token=refresh_token, user_id=user.id, expires_at=expires_at))
@@ -127,7 +127,7 @@ async def refresh(
     # Rotate token
     settings = get_settings()
     new_refresh = create_refresh_token(user_id)
-    expires_at = datetime.now(timezone.utc) + timedelta(
+    expires_at = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(
         days=settings.REFRESH_TOKEN_EXPIRE_DAYS
     )
     await db.delete(stored)

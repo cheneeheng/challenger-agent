@@ -7,6 +7,8 @@ from app.db.models.session import Session as DBSession
 from app.db.models.user import User
 from app.db.session import get_db
 from app.dependencies.auth import get_current_user
+from app.db.models.message import Message as DBMessage
+from app.schemas.chat import MessageResponse
 from app.schemas.session import (
     CreateSessionRequest,
     SessionListItem,
@@ -37,7 +39,15 @@ def _build_initial_graph(idea: str) -> dict:
     }
 
 
-def _to_response(session: DBSession) -> SessionResponse:
+def _to_response(
+    session: DBSession,
+    messages: list[DBMessage] | None = None,
+) -> SessionResponse:
+    msg_responses = (
+        [MessageResponse.model_validate(m) for m in sorted(messages, key=lambda m: m.message_index)]
+        if messages is not None
+        else []
+    )
     return SessionResponse(
         id=session.id,
         name=session.name,
@@ -45,6 +55,7 @@ def _to_response(session: DBSession) -> SessionResponse:
         selected_model=session.selected_model,
         graph_state=session.graph_state,
         context_summary=session.context_summary,
+        messages=msg_responses,
         created_at=session.created_at,
         updated_at=session.updated_at,
     )
@@ -115,7 +126,7 @@ async def get_session(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
     if session.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
-    return _to_response(session)
+    return _to_response(session, messages=list(session.messages))
 
 
 @router.patch("/{session_id}", response_model=SessionResponse)
@@ -137,7 +148,7 @@ async def update_session(
         from app.core.config import get_settings
         if body.selected_model not in get_settings().ALLOWED_CLAUDE_MODELS:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=422,
                 detail="Invalid model",
             )
         session.selected_model = body.selected_model

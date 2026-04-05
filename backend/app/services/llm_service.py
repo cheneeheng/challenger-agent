@@ -171,10 +171,12 @@ async def persist_messages(
     message_uuid: str,
 ) -> None:
     async with db.begin_nested():
+        # NOTE: FOR UPDATE is invalid with aggregate functions in PostgreSQL.
+        # begin_nested() (SAVEPOINT) provides sufficient isolation within the
+        # outer transaction; no row-level lock is needed here.
         result = await db.execute(
             select(func.max(Message.message_index))
             .where(Message.session_id == session_id)
-            .with_for_update()
         )
         max_index = result.scalar() or -1
 

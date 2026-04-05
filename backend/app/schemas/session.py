@@ -2,6 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
+from app.schemas.chat import MessageResponse
 from app.schemas.graph import AnalysisGraph
 
 
@@ -33,6 +34,7 @@ class SessionResponse(BaseModel):
     selected_model: str
     graph_state: dict
     context_summary: str | None
+    messages: list[MessageResponse] = []
     created_at: datetime
     updated_at: datetime
 

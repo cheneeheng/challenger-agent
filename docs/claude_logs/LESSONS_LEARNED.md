@@ -55,3 +55,21 @@
 **What happened:** Built session cards as `<button onclick={navigate}>` elements containing a nested `<button onclick={delete}>` for the delete action. Svelte raised `node_invalid_placement` because the browser repairs this by moving or removing elements, breaking event delegation.
 
 **Lesson:** Interactive card patterns that need nested clickable controls cannot use `<button>` for the outer container. Use `<div role="button" tabindex="0">` for the outer element and reserve `<button>` for the inner controls. Add both `onclick` and `onkeydown` (Enter key) to the div for accessibility.
+
+## 2026-04-05 — Test db fixture diverged from production AsyncSessionLocal
+
+**What happened:** `tests/conftest.py` created `AsyncSession(conn, join_transaction_mode="create_savepoint")` without `expire_on_commit=False`. Production `AsyncSessionLocal` has `expire_on_commit=False`. Tests that exercised `db.commit()` mid-request triggered `MissingGreenlet` errors because expired attributes were lazily loaded outside a greenlet context.
+
+**Lesson:** When building a test DB session, copy every constructor kwarg from the production `AsyncSessionLocal`. Any mismatch in `expire_on_commit`, `autoflush`, etc. creates subtle divergence that only manifests on specific code paths. Treat the test session as a drop-in replica of production, not a minimal stub.
+
+## 2026-04-05 — coverage.py `asyncio` is not a valid concurrency option
+
+**What happened:** Added `concurrency = ["greenlet", "thread", "asyncio"]` to `[tool.coverage.run]` in `pyproject.toml`. coverage.py raised `ConfigError: Unknown concurrency choices: asyncio` and pytest failed to start.
+
+**Lesson:** The only valid values for `coverage.py`'s `concurrency` setting are `"thread"`, `"greenlet"`, and `"multiprocessing"`. `"asyncio"` is not valid — asyncio coroutines are tracked natively without any extra setting. For SQLAlchemy async code, `"greenlet"` is the required option.
+
+## 2026-04-05 — Subagent flagged valid Svelte patterns as bugs
+
+**What happened:** An Explore subagent reviewing the frontend reported `get({ subscribe })` and `appendToken(token)` as "critical correctness bugs". Neither was a bug: `get()` from `svelte/store` accepts any `{ subscribe }` object, and a no-ID `appendToken` is correct when only one message streams at a time.
+
+**Lesson:** Subagent code review findings must be verified against the actual API documentation and runtime constraints before acting. Agents frequently pattern-match from a different framework's idioms. For Svelte specifically, verify against the Svelte 5 docs rather than trusting a React-informed review.

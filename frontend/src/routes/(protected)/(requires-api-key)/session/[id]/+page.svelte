@@ -82,12 +82,6 @@
           },
           onGraphAction: (action) => {
             graphStore.applyGraphActions([action])
-            // Auto-layout when first nodes come in
-            const currentNodes = get(graphStore).nodes
-            if (currentNodes.length > 0 && currentNodes.length <= 5) {
-              const laid = applyDagreLayout(currentNodes, get(graphStore).edges)
-              graphStore.setGraph({ nodes: laid, edges: get(graphStore).edges })
-            }
             sessionStore.saveGraph()
           },
           onError: (msg) => {
@@ -97,6 +91,13 @@
           },
           onDone: () => {
             chatStore.finalizeMessage()
+            // Run Dagre layout after every LLM response so the graph
+            // is always neatly arranged (respects userPositioned flags).
+            const { nodes, edges } = get(graphStore)
+            if (nodes.length > 0) {
+              const laid = applyDagreLayout(nodes, edges)
+              graphStore.setGraph({ nodes: laid, edges })
+            }
             sessionStore.saveGraph()
           },
         }

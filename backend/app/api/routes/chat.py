@@ -71,22 +71,27 @@ async def chat(
                 headers=_SSE_HEADERS,
             )
 
-    # Context management
+    # Context management — capture messages and summary before any commit so
+    # that accessing them later does not trigger an expired-attribute lazy-load.
     settings = get_settings()
-    messages = session.messages
-    if len(messages) > settings.CONTEXT_WINDOW_MAX_MESSAGES and not session.context_summary:
+    messages = list(session.messages)
+    context_summary = session.context_summary
+    context_summary_covers_up_to = session.context_summary_covers_up_to
+
+    if len(messages) > settings.CONTEXT_WINDOW_MAX_MESSAGES and not context_summary:
         to_summarize = messages[: -settings.CONTEXT_WINDOW_MAX_MESSAGES]
-        summary = await llm_service.summarize_messages(to_summarize, api_key)
-        session.context_summary = summary
-        session.context_summary_covers_up_to = to_summarize[-1].message_index
+        context_summary = await llm_service.summarize_messages(to_summarize, api_key)
+        context_summary_covers_up_to = to_summarize[-1].message_index
+        session.context_summary = context_summary
+        session.context_summary_covers_up_to = context_summary_covers_up_to
         await db.commit()
 
     llm_messages = llm_service.build_messages(
-        messages=session.messages,
+        messages=messages,
         graph_state=body.graph_state,
         user_message=body.message,
-        context_summary=session.context_summary,
-        context_summary_covers_up_to=session.context_summary_covers_up_to,
+        context_summary=context_summary,
+        context_summary_covers_up_to=context_summary_covers_up_to,
     )
 
     message_uuid = str(uuid4())

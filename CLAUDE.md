@@ -26,10 +26,12 @@ pytest -q                     # Tests (run from backend/)
 pytest tests/path/test_file.py::test_name  # Single test
 
 # Frontend (run from frontend/)
-npm run dev       # Dev server
-npm run build     # Production build
-npm run check     # Type-check (svelte-check + tsc)
-npm run preview   # Preview production build
+bun run dev       # Dev server
+bun run build     # Production build
+bun run check     # Type-check (svelte-check + tsc)
+bun run preview   # Preview production build
+bun run test      # Run vitest (unit tests)
+bun run test:coverage  # With coverage report
 
 # Pre-commit
 pre-commit run --all-files
@@ -66,6 +68,7 @@ lib/
   components/     # Reusable Svelte components
   stores/         # Svelte stores (shared state)
   api/            # Typed API client (fetch wrappers)
+  index.ts        # Barrel export for lib/
 app.d.ts          # Global TypeScript declarations
 app.html          # HTML shell
 ```

@@ -1,10 +1,10 @@
 {
-  "name": "FastAPI + SvelteKit Dev",
+  "name": "Challenger Agent",
 
   "build": {
     // Path is relative to the devcontainer.json file.
     "dockerfile": "Dockerfile",
-    "options": ["--tag=fastapi-sveltekit-dev:latest"]
+    "options": ["--tag=challenger-agent-dev:260404"]
   },
 
   "containerEnv": {
@@ -15,8 +15,9 @@
   "remoteUser": "ubuntu",
 
   "mounts": [
-    "source=${localEnv:USERPROFILE}/.gemini,target=/home/ubuntu/.gemini,type=bind",
-    "source=${localEnv:USERPROFILE}/.claude,target=/home/ubuntu/.claude,type=bind"
+    // "source=${localEnv:USERPROFILE}/.gemini,target=/home/ubuntu/.gemini,type=bind",
+    "source=${localEnv:USERPROFILE}/.claude_devcontainer,target=/home/ubuntu/.claude,type=bind",
+    "source=${localEnv:USERPROFILE}/.ssh,target=/home/ubuntu/.ssh,type=bind"
   ],
 
   // This is where your source code will be mounted.

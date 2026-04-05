@@ -2,7 +2,7 @@
 name = "backend"
 version = "0.0.1"
 description = "FastAPI backend"
-authors = [{ name = "{{ author_name }}", email = "author@example.com" }]
+authors = [{ name = "EeHeng Chen", email = "author@example.com" }]
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: Apache 2.0 License",
@@ -13,7 +13,18 @@ requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.34.0",
+    "pydantic[email]>=2.0.0",
     "pydantic-settings>=2.7.0",
+    "structlog>=24.0.0",
+    "sqlalchemy[asyncio]>=2.0.0",
+    "asyncpg>=0.30.0",
+    "alembic>=1.14.0",
+    "python-jose[cryptography]>=3.3.0",
+    "passlib[bcrypt]>=1.7.4",
+    "python-multipart>=0.0.9",
+    "cryptography>=42.0.0",
+    "anthropic>=0.40.0",
+    "slowapi>=0.1.9",
 ]
 
 [project.optional-dependencies]

@@ -6,6 +6,59 @@ Format: `[version] YYYY-MM-DD — description`
 
 ---
 
+## [0.3.0] 2026-04-04 — IdeaLens application: full backend and frontend implementation
+
+### Added
+
+#### Backend
+- **`backend/app/core/config.py`** — Rebuilt as pydantic-settings v2 `Settings` with `get_settings()` lru_cache. List fields (`FRONTEND_URLS`, `ALLOWED_CLAUDE_MODELS`) are stored as `_RAW` string env vars and exposed via `@property` to work around pydantic-settings v2 JSON-decoding list fields before validators run.
+- **`backend/app/db/models/`** — Four SQLAlchemy ORM models: `User`, `RefreshToken`, `Session` (with JSONB `graph_state`), `Message` (using `metadata_` to avoid SQLAlchemy reserved-name conflict).
+- **`backend/app/db/base.py`** — Async engine and `AsyncSessionLocal` factory using `asyncpg`.
+- **`backend/app/db/session.py`** — `get_db` async generator dependency with commit/rollback.
+- **`backend/app/services/auth_service.py`** — JWT access/refresh tokens and bcrypt password hashing.
+- **`backend/app/services/encryption_service.py`** — Fernet symmetric encryption for storing user API keys at rest.
+- **`backend/app/services/llm_service.py`** — `build_messages`, `stream_with_heartbeat`, `parse_llm_response`, `summarize_messages`, `persist_messages`. Handles streaming SSE, graph action extraction from LLM output, and context window management via summarisation.
+- **`backend/app/schemas/`** — Pydantic schemas for `auth`, `user`, `session`, `chat`, `graph`, `models`.
+- **`backend/app/dependencies/auth.py`** — `get_current_user` FastAPI dependency.
+- **`backend/app/api/routes/auth.py`** — register, login, token refresh, logout.
+- **`backend/app/api/routes/users.py`** — profile, password change, API key management, account deletion.
+- **`backend/app/api/routes/sessions.py`** — session CRUD and graph state PUT.
+- **`backend/app/api/routes/chat.py`** — SSE streaming endpoint with reconnection support.
+- **`backend/app/api/routes/models.py`** — public listing of allowed Claude model IDs.
+- **`backend/app/prompts/analysis_system.py`** — Full v1.0 system prompt for IdeaLens idea analysis.
+- **`backend/alembic/`** — Async Alembic configuration (`env.py`, `script.py.mako`) and initial schema migration (`f965869e64a3_initial_schema`) covering all four tables. Migration has been applied.
+- **`backend/.env.example`** — Reference file documenting all required environment variables.
+
+#### Frontend
+- **`frontend/src/app.css`** — Tailwind import and custom scrollbar styles.
+- **`frontend/src/lib/config.ts`** — `API_BASE_URL` sourced from `PUBLIC_API_URL`.
+- **`frontend/src/lib/schemas/graph.ts`** — Zod schemas for graph node/edge types and LLM graph actions.
+- **`frontend/src/lib/stores/`** — Four Svelte stores: `authStore` (with localStorage persistence), `chatStore` (streaming message state), `graphStore` (`applyGraphActions`, `getSnapshot`), `sessionStore` (session CRUD with debounced graph save).
+- **`frontend/src/lib/services/`** — `api.ts` (Axios instance with Bearer interceptor and 401 auto-refresh), `authService.ts`, `userService.ts`, `sessionService.ts`, `chatService.ts`.
+- **`frontend/src/lib/utils/`** — `graphLayout.ts` (Dagre auto-layout, respects `userPositioned` flag), `graphStyles.ts` (colour/label map per `DimensionType`), `debounce.ts`.
+- **`frontend/src/routes/+layout.ts`** — SPA mode (`ssr = false`, `prerender = false`).
+- **`frontend/src/routes/login/+page.svelte`** and **`register/+page.svelte`** — Auth forms.
+- **`frontend/src/routes/(protected)/+layout.ts`** — Auth guard redirecting unauthenticated users to `/login`.
+- **`frontend/src/routes/(protected)/settings/+page.svelte`** — Profile, API key, password, and danger-zone (account deletion) settings.
+- **`frontend/src/routes/(protected)/(requires-api-key)/+layout.ts`** — Guard redirecting users without an API key to settings.
+- **`frontend/src/routes/(protected)/(requires-api-key)/+page.svelte`** — Dashboard with session list and New Analysis modal.
+- **`frontend/src/routes/(protected)/(requires-api-key)/session/[id]/+page.svelte`** — Workspace with auto-send on load, streaming chat, and live graph action processing.
+- **`frontend/src/lib/components/layout/`** — `AppHeader.svelte` (inline session rename), `SplitLayout.svelte` (svelte-splitpanes 40/60 split).
+- **`frontend/src/lib/components/chat/`** — `ChatPanel.svelte`, `ChatInput.svelte`, `MessageBubble.svelte`, `ModelSelector.svelte`.
+- **`frontend/src/lib/components/graph/`** — `GraphPanel.svelte` (@xyflow/svelte controlled flow), `GraphToolbar.svelte` (auto-layout trigger), `NodeDetailPanel.svelte` (slide-over with edit/delete), `nodes/AnalysisNodeComponent.svelte` (custom node styled by `DimensionType`).
+
+### Changed
+- **`backend/app/main.py`** — Rewrote with `create_app()` factory, correct middleware order (CORS then SecurityHeaders), slowapi rate limiter, and lifespan DB connectivity check.
+- **`frontend/src/routes/+layout.svelte`** — Added `<Toaster>` and `authStore.init()` call.
+- **`frontend/svelte.config.js`** — Added `vitePreprocess()`.
+- **`frontend/vite.config.ts`** — Configured `server.host` and `server.port` (5173).
+- **`frontend/package.json`** — Added dependencies: `@xyflow/svelte`, `@dagrejs/dagre`, `zod`, `axios`, `svelte-sonner`, `svelte-splitpanes`, `lucide-svelte`, `date-fns`, `uuid`.
+
+### Removed
+- **`frontend/src/routes/+page.svelte`** — Deleted; the dashboard now lives at `(protected)/(requires-api-key)/+page.svelte`.
+
+---
+
 ## [0.2.2] 2026-04-03 — Devcontainer and developer experience fixes
 
 ### Fixed

@@ -6,6 +6,19 @@ Format: `[version] YYYY-MM-DD — description`
 
 ---
 
+## [0.3.2] 2026-04-10 — Workspace rename to challenger-agent and external Docker network
+
+### Changed
+- **`.devcontainer/Dockerfile`** — Renamed `/workspace` to `/challenger-agent` as the container working directory. Updated `PYTHONPATH` to `/challenger-agent/backend` to match.
+- **`.devcontainer/devcontainer.json`** — Added `runArgs: ["--network=backend"]` so the devcontainer joins the external `backend` Docker network, enabling direct connectivity to the postgres container running via `docker-compose.yml`.
+- **`.vscode/settings.json`** — Updated `PYTHONPATH`, `python.defaultInterpreterPath`, and `ruff.interpreter` from `/workspace/...` to `/challenger-agent/...` to match the Dockerfile path rename.
+- **`docker-compose.yml`** — Attached the `postgres` service to an external Docker network named `backend`. Added the `networks` section declaring `backend` as `external: true` so the devcontainer and compose services share a network namespace.
+- **`backend/pyproject.toml`** — Bumped version to `0.3.2`. Changed license field from a classifier string to SPDX `license = "Apache-2.0"`. Added `[tool.setuptools.packages.find]` with `include = ["app"]` and `exclude = ["alembic"]` to scope package discovery correctly.
+- **`frontend/package.json`** — Bumped version to `0.3.2`.
+- **`README.md`** — Added `Version: 0.3.2` line.
+
+---
+
 ## [0.3.1] 2026-04-05 — Bug fixes, test coverage to 99%, and frontend unit tests
 
 ### Fixed

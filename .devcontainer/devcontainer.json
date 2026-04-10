@@ -7,6 +7,9 @@
     "options": ["--tag=challenger-agent-dev:260404"]
   },
 
+
+  "runArgs": ["--network=backend"],
+
   "containerEnv": {
     "UV_CACHE_DIR": "/${localWorkspaceFolderBasename}/.uv-cache"
   },

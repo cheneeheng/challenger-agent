@@ -1,7 +1,7 @@
 {
     "terminal.integrated.defaultProfile.linux": "bash",
     "terminal.integrated.env.linux": {
-        "PYTHONPATH": "/workspace/backend"
+        "PYTHONPATH": "/challenger-agent/backend"
     },
     "diffEditor.renderSideBySide": true,
     "editor.rulers": [
@@ -19,7 +19,7 @@
         },
         "editor.defaultFormatter": "charliermarsh.ruff"
     },
-    "python.defaultInterpreterPath": "/workspace/backend/.venv/bin/python3",
+    "python.defaultInterpreterPath": "/challenger-agent/backend/.venv/bin/python3",
     "python.analysis.autoImportCompletions": true,
     "python.analysis.autoFormatStrings": true,
     "python.analysis.typeCheckingMode": "standard",
@@ -30,7 +30,7 @@
     "python.testing.unittestEnabled": false,
     "python.testing.pytestEnabled": true,
     "ruff.interpreter": [
-        "/workspace/backend/.venv/bin/python3"
+        "/challenger-agent/backend/.venv/bin/python3"
     ],
 	"files.associations": {
 		"*.css": "tailwindcss"

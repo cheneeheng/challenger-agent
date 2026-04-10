@@ -1,13 +1,13 @@
 [project]
 name = "backend"
-version = "0.0.1"
+version = "0.3.2"
 description = "FastAPI backend"
 authors = [{ name = "EeHeng Chen", email = "author@example.com" }]
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: Apache 2.0 License",
     "Operating System :: OS Independent",
 ]
+license = "Apache-2.0"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -46,6 +46,9 @@ build-backend = "setuptools.build_meta"
 # Find is relative to this pyproject.toml file.
 # [tool.setuptools.packages.find]
 # where = ["app"]
+[tool.setuptools.packages.find]
+include = ["app"]
+exclude = ["alembic"]
 
 [tool.pytest.ini_options]
 minversion = "6.0"

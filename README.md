@@ -4,6 +4,8 @@ An LLM-powered idea analysis tool. Describe any idea in natural language; Claude
 knowledge graph — nodes for concepts, requirements, benefits, flaws, gaps, alternatives — while
 you chat. Edit nodes directly, ask follow-up questions, and watch the graph evolve in real time.
 
+Version: 0.3.2
+
 ---
 
 ## Stack

@@ -6,6 +6,8 @@ services:
       POSTGRES_USER: idealens
       POSTGRES_PASSWORD: idealens
       POSTGRES_DB: idealens
+    networks:
+      - backend
     ports:
       - "5432:5432"
     volumes:
@@ -19,3 +21,7 @@ services:
 
 volumes:
   postgres_data:
+
+networks:
+  backend:
+    external: true

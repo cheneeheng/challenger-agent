@@ -10,25 +10,25 @@ Both services (backend and frontend) are containerised and deployed independentl
 
 ---
 
+## Provider guides
+
+- [AWS (App Runner + RDS)](aws/README.md) — includes RDS, VPC connector, Secrets Manager setup
+
+---
+
 ## Quick start (any provider)
 
-```bash
-# From repo root
-export APP_NAME=myapp          # used for service and registry names
+All scripts read from the root `.env` automatically. Fill in the relevant
+section of `.env`, then run the script.
 
-# AWS
-export AWS_REGION=us-east-1
-export APPRUNNER_ECR_ROLE_ARN=arn:aws:iam::123456789012:role/AppRunnerECRRole
+```bash
+# AWS — see deploy/aws/README.md for full setup (RDS, VPC connector, etc.)
 bash deploy/aws/deploy.sh
 
 # GCP
-export GCP_PROJECT=my-gcp-project
-export GCP_REGION=us-central1
 bash deploy/gcp/deploy.sh
 
 # Azure
-export RESOURCE_GROUP=myapp-rg
-export LOCATION=eastus
 bash deploy/azure/deploy.sh
 ```
 
@@ -69,8 +69,11 @@ on:
 - `GCP_SA_KEY` — service account JSON with Artifact Registry Writer + Cloud Run Admin + Service Account User
 
 **AWS** — set in repo Settings → Secrets:
-- `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `AWS_ACCOUNT_ID`, `APP_NAME`
-- `APPRUNNER_ECR_ROLE_ARN` — IAM role with `AmazonEC2ContainerRegistryReadOnly`
+- `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `APP_NAME`
+- `APPRUNNER_ECR_ROLE_ARN` — IAM role with `AWSAppRunnerServicePolicyForECRAccess`
+- `DATABASE_URL`, `JWT_SECRET`, `API_KEY_ENCRYPTION_KEY`
+- `VPC_CONNECTOR_ARN` — required when RDS is in a private VPC (output of `setup-infra.sh`)
+- See [deploy/aws/README.md](aws/README.md) for the full setup procedure.
 
 **Azure** — set in repo Settings → Secrets:
 - `AZURE_CREDENTIALS` (service principal JSON), `RESOURCE_GROUP`, `APP_NAME`, `LOCATION`
@@ -79,7 +82,7 @@ on:
 
 ## Terraform
 
-The deploy scripts use each provider's CLI directly, which is the right fit for this template's scope — two stateless containers with no networking complexity. The scripts are idempotent and readable without any additional tooling.
+The deploy scripts use each provider's CLI directly. They are idempotent and readable without any additional tooling. The AWS script now also handles VPC networking for a private RDS instance.
 
 Migrate to Terraform when any of the following become true:
 
@@ -95,14 +98,13 @@ At that point, replace the scripts with a `deploy/terraform/` directory containi
 
 ## Adding a database
 
-For managed databases, provision them outside this template and inject the
-`DATABASE_URL` as an environment variable. Recommended services:
+**AWS** — handled by `deploy/aws/setup-infra.sh`. See [deploy/aws/README.md](aws/README.md).
 
-| Provider | Service |
-|---|---|
-| AWS | RDS (Postgres) or Aurora Serverless |
-| GCP | Cloud SQL (Postgres) |
-| Azure | Azure Database for PostgreSQL |
+**GCP / Azure** — provision a managed database (Cloud SQL or Azure Database for
+PostgreSQL), inject `DATABASE_URL` as an environment variable, and run Alembic
+migrations before the new image goes live:
 
-Use Alembic for migrations. Run migrations as a pre-deploy step or a one-off
-container task before the new image goes live.
+```bash
+DATABASE_URL='postgresql+asyncpg://...' \
+  cd backend && uv run alembic upgrade head
+```

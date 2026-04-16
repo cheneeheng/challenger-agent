@@ -6,6 +6,26 @@ Format: `[version] YYYY-MM-DD — description`
 
 ---
 
+## [0.3.4] 2026-04-16 — AWS infrastructure setup, deploy script overhaul, .env sourcing
+
+### Added
+- **`deploy/aws/setup-infra.sh`** — One-time idempotent script that provisions the AWS infrastructure needed before a first deploy: RDS PostgreSQL 16 (private, `db.t3.micro`, 7-day backups) in the default VPC; a security group allowing port 5432 from the VPC CIDR; an RDS subnet group; an App Runner VPC connector so the backend service has egress to the private database; and Secrets Manager entries for `DATABASE_URL`, `JWT_SECRET`, and `API_KEY_ENCRYPTION_KEY`. Prints the `VPC_CONNECTOR_ARN` and `DATABASE_URL` values to add to `.env`.
+- **`deploy/aws/README.md`** — Full AWS deployment procedure: IAM role creation, step-by-step first deploy (setup-infra → migrations → deploy), subsequent deploy flow, Secrets Manager promotion path, notes on `PUBLIC_API_URL` build-time compilation and CORS.
+
+### Changed
+- **`deploy/aws/deploy.sh`** — Major overhaul. Now sources root `.env` automatically (no manual exports needed). Added `DATABASE_URL`, `JWT_SECRET`, `API_KEY_ENCRYPTION_KEY` as required vars and optional `VPC_CONNECTOR_ARN`. Fixed `APP_ENV` → `ENVIRONMENT`. Build order corrected: backend builds and deploys first, then frontend image is built with `--build-arg PUBLIC_API_URL=https://$BACKEND_URL` so Vite compiles the correct backend URL into the bundle. `FRONTEND_URLS_RAW` defaults to the deployed frontend URL and is set on the backend in a second pass. `PUBLIC_API_URL` removed from runtime env vars (it is baked into the image at build time).
+- **`infra/Dockerfile.frontend`** — Added `ARG PUBLIC_API_URL` and `ENV PUBLIC_API_URL=$PUBLIC_API_URL` before `bun run build`. Vite picks this up via `$env/static/public`, allowing the backend URL to be injected at image build time rather than being hardcoded in the repo.
+- **`.github/workflows/deploy-aws.yaml`** — Removed duplicate build steps (the old workflow built images in the workflow *and* in `deploy.sh`). Workflow now solely configures AWS credentials and runs `deploy.sh`. Added `DATABASE_URL`, `JWT_SECRET`, `API_KEY_ENCRYPTION_KEY`, `VPC_CONNECTOR_ARN` secrets. Removed `AWS_ACCOUNT_ID` (obtained via `sts get-caller-identity` in the script). Image tag computed as short SHA via a dedicated step.
+- **`.env.example`** — Added `# --- AWS Deploy ---` section with `APP_NAME`, `AWS_REGION`, `APPRUNNER_ECR_ROLE_ARN`, `DB_PASSWORD`, and `VPC_CONNECTOR_ARN` so all deployment config lives in one file.
+- **`deploy/aws/setup-infra.sh`** (and `deploy.sh`) — Both scripts source the root `.env` at startup using `set -o allexport` + `source` with comment/blank-line stripping, so no manual `export` calls are needed before running them.
+
+### Docs
+- **`deploy/README.md`** — Quick-start simplified to "fill in `.env` and run the script". AWS secrets list corrected (removed `AWS_ACCOUNT_ID`, added `DATABASE_URL`/`JWT_SECRET`/`API_KEY_ENCRYPTION_KEY`/`VPC_CONNECTOR_ARN`). "Adding a database" section updated: AWS handled by `setup-infra.sh`, GCP/Azure instructions remain. Terraform note updated to reflect that AWS networking complexity is now handled.
+- **`infra/README.md`** — `Dockerfile.frontend` entry notes the `PUBLIC_API_URL` build arg.
+- **`README.md`** — Project tree updated to show `deploy/aws/` subdirectory with all three files. Deployment section simplified to point to `deploy/README.md`.
+
+---
+
 ## [0.3.3] 2026-04-16 — Consolidate env files and move docker-compose to infra
 
 ### Changed

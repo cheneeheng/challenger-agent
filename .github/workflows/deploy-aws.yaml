@@ -4,27 +4,43 @@ on:
   workflow_dispatch:
     inputs:
       image_tag:
-        description: "Image tag (defaults to commit SHA)"
+        description: "Image tag (leave blank to use the short commit SHA)"
         required: false
 
-# Required repository secrets:
-#   AWS_ACCESS_KEY_ID        — IAM user key with ECR + App Runner permissions
+# Required repository secrets (Settings → Secrets and variables → Actions):
+#   AWS_ACCESS_KEY_ID        — IAM user key
 #   AWS_SECRET_ACCESS_KEY    — IAM user secret
 #   AWS_REGION               — e.g. us-east-1
-#   AWS_ACCOUNT_ID           — 12-digit AWS account number
-#   APP_NAME                 — Application name
-#   APPRUNNER_ECR_ROLE_ARN   — IAM role ARN with AmazonEC2ContainerRegistryReadOnly
+#   APP_NAME                 — used for ECR repo and App Runner service names
+#   APPRUNNER_ECR_ROLE_ARN   — IAM role with AWSAppRunnerServicePolicyForECRAccess
+#   DATABASE_URL             — postgresql+asyncpg://user:pass@host:5432/db
+#   JWT_SECRET               — min 32 chars; openssl rand -hex 32
+#   API_KEY_ENCRYPTION_KEY   — Fernet key
+#
+# Optional secrets:
+#   VPC_CONNECTOR_ARN        — required when RDS is in a private VPC
+#   SEED_ANTHROPIC_API_KEY   — pre-seed an Anthropic key for the first user
+#
+# One-time setup before first run:
+#   1. Create the IAM role — see deploy/aws/README.md
+#   2. Provision RDS + VPC connector: bash deploy/aws/setup-infra.sh
+#   3. Run Alembic migrations against the new database
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    env:
-      APP_NAME: ${{ secrets.APP_NAME }}
-      AWS_REGION: ${{ secrets.AWS_REGION }}
-      IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Compute image tag
+        id: tag
+        run: |
+          if [ -n "${{ inputs.image_tag }}" ]; then
+            echo "value=${{ inputs.image_tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          fi
 
       - uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -32,35 +48,15 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Build and push backend
-        run: |
-          REGISTRY="${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.$AWS_REGION.amazonaws.com"
-          aws ecr describe-repositories --repository-names "$APP_NAME-backend" 2>/dev/null \
-            || aws ecr create-repository --repository-name "$APP_NAME-backend" \
-                 --image-scanning-configuration scanOnPush=true
-          docker build --platform linux/amd64 \
-            -t "$REGISTRY/$APP_NAME-backend:$IMAGE_TAG" \
-            -t "$REGISTRY/$APP_NAME-backend:latest" \
-            -f infra/Dockerfile.backend backend/
-          docker push "$REGISTRY/$APP_NAME-backend:$IMAGE_TAG"
-          docker push "$REGISTRY/$APP_NAME-backend:latest"
-
-      - name: Build and push frontend
-        run: |
-          REGISTRY="${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.$AWS_REGION.amazonaws.com"
-          aws ecr describe-repositories --repository-names "$APP_NAME-frontend" 2>/dev/null \
-            || aws ecr create-repository --repository-name "$APP_NAME-frontend" \
-                 --image-scanning-configuration scanOnPush=true
-          docker build --platform linux/amd64 \
-            -t "$REGISTRY/$APP_NAME-frontend:$IMAGE_TAG" \
-            -t "$REGISTRY/$APP_NAME-frontend:latest" \
-            -f infra/Dockerfile.frontend frontend/
-          docker push "$REGISTRY/$APP_NAME-frontend:$IMAGE_TAG"
-          docker push "$REGISTRY/$APP_NAME-frontend:latest"
-
-      - name: Deploy to App Runner
+      - name: Deploy
         run: bash deploy/aws/deploy.sh
         env:
+          APP_NAME: ${{ secrets.APP_NAME }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
           APPRUNNER_ECR_ROLE_ARN: ${{ secrets.APPRUNNER_ECR_ROLE_ARN }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          API_KEY_ENCRYPTION_KEY: ${{ secrets.API_KEY_ENCRYPTION_KEY }}
+          VPC_CONNECTOR_ARN: ${{ secrets.VPC_CONNECTOR_ARN }}
+          SEED_ANTHROPIC_API_KEY: ${{ secrets.SEED_ANTHROPIC_API_KEY }}
+          IMAGE_TAG: ${{ steps.tag.outputs.value }}

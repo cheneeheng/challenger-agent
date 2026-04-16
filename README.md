@@ -4,7 +4,7 @@ An LLM-powered idea analysis tool. Describe any idea in natural language; Claude
 knowledge graph — nodes for concepts, requirements, benefits, flaws, gaps, alternatives — while
 you chat. Edit nodes directly, ask follow-up questions, and watch the graph evolve in real time.
 
-Version: 0.3.3
+Version: 0.3.4
 
 ---
 
@@ -170,7 +170,10 @@ pre-commit run --all-files
 │   └── Dockerfile.frontend     # Multi-stage Bun builder + Node runner
 │
 ├── deploy/
-│   ├── aws/deploy.sh           # ECR + App Runner
+│   ├── aws/
+│   │   ├── setup-infra.sh      # One-time: RDS, VPC connector, Secrets Manager
+│   │   ├── deploy.sh           # ECR + App Runner (reads root .env)
+│   │   └── README.md           # Full AWS setup procedure
 │   ├── gcp/deploy.sh           # Artifact Registry + Cloud Run
 │   └── azure/deploy.sh         # ACR + Container Apps
 │
@@ -228,18 +231,15 @@ See [`docs/plan/02_TODOS.md`](docs/plan/02_TODOS.md) for the full status. Key re
 
 ## Deployment
 
-See [`deploy/README.md`](deploy/README.md). GitHub Actions workflows for AWS, GCP, and Azure are in `.github/workflows/`.
+All deploy scripts read from the root `.env`. Fill in the relevant section and run the script. See [`deploy/README.md`](deploy/README.md) and the per-provider guides for full instructions.
 
 ```bash
-# GCP Cloud Run
-export APP_NAME=idealens GCP_PROJECT=my-project
-bash deploy/gcp/deploy.sh
-
-# AWS App Runner
-export APP_NAME=idealens AWS_REGION=us-east-1
+# AWS App Runner (first time: run setup-infra.sh first — see deploy/aws/README.md)
 bash deploy/aws/deploy.sh
 
+# GCP Cloud Run
+bash deploy/gcp/deploy.sh
+
 # Azure Container Apps
-export APP_NAME=idealens RESOURCE_GROUP=idealens-rg
 bash deploy/azure/deploy.sh
 ```

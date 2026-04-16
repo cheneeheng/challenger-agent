@@ -1,6 +1,6 @@
 [project]
 name = "backend"
-version = "0.3.2"
+version = "0.3.3"
 description = "FastAPI backend"
 authors = [{ name = "EeHeng Chen", email = "author@example.com" }]
 classifiers = [

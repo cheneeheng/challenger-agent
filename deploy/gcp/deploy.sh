@@ -81,7 +81,7 @@ gcloud run deploy "$APP_NAME-frontend" \
   --project "$GCP_PROJECT" \
   --port 3000 \
   --allow-unauthenticated \
-  --set-env-vars "PUBLIC_API_BASE_URL=$BACKEND_URL"
+  --set-env-vars "PUBLIC_API_URL=$BACKEND_URL"
 
 FRONTEND_URL=$(gcloud run services describe "$APP_NAME-frontend" \
   --platform managed \

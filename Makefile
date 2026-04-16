@@ -13,11 +13,11 @@ frontend:
 
 # Start only the postgres container (detached, waits for healthy).
 db:
-	docker compose up -d postgres --wait
+	docker compose -f infra/docker-compose.dev.yml up -d postgres --wait
 
 # Stop the postgres container.
 db-stop:
-	docker compose stop postgres
+	docker compose -f infra/docker-compose.dev.yml stop postgres
 
 # Run Alembic migrations against the dev database.
 db-migrate:

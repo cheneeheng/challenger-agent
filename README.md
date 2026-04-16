@@ -4,7 +4,7 @@ An LLM-powered idea analysis tool. Describe any idea in natural language; Claude
 knowledge graph — nodes for concepts, requirements, benefits, flaws, gaps, alternatives — while
 you chat. Edit nodes directly, ask follow-up questions, and watch the graph evolve in real time.
 
-Version: 0.3.2
+Version: 0.3.3
 
 ---
 
@@ -50,7 +50,7 @@ sudo service postgresql start
 cd backend && uv run alembic upgrade head
 
 # 4. Copy and fill in environment variables
-cp backend/.env.example backend/.env
+cp .env.example .env
 # Required: JWT_SECRET, API_KEY_ENCRYPTION_KEY, DATABASE_URL
 
 # 5. Run backend + frontend in parallel
@@ -72,6 +72,7 @@ Backend on `:8000`, frontend on `:5173`.
 | `FRONTEND_URLS_RAW` | backend | Comma-separated allowed CORS origins. Default: `http://localhost:5173` |
 | `CONTEXT_WINDOW_MAX_MESSAGES` | backend | Messages before summarisation kicks in. Default: `20` |
 | `PUBLIC_API_URL` | frontend | Backend base URL. Default: `http://localhost:8000` |
+| `ORIGIN` | frontend | Production only — required by adapter-node for CSRF. Set to the public frontend URL. |
 
 ---
 
@@ -173,7 +174,7 @@ pre-commit run --all-files
 │   ├── gcp/deploy.sh           # Artifact Registry + Cloud Run
 │   └── azure/deploy.sh         # ACR + Container Apps
 │
-├── docker-compose.yml          # PostgreSQL for local dev + test DB init
+├── infra/docker-compose.dev.yml  # PostgreSQL for local dev + test DB init
 ├── .github/workflows/          # ci.yaml + deploy-{aws,gcp,azure}.yaml
 ├── Makefile
 └── docs/plan/                  # Architecture, todos, implementation plans

@@ -35,7 +35,9 @@ class Settings(BaseSettings):
     SEED_ANTHROPIC_API_KEY: str = ""
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        # Root .env is canonical; fall back to .env in cwd for any tool
+        # that runs directly from backend/ during local dev.
+        env_file=("../.env", ".env"),
         env_file_encoding="utf-8",
         case_sensitive=True,
     )

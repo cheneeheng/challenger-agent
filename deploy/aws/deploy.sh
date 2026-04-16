@@ -128,7 +128,7 @@ if aws apprunner list-services --query "ServiceSummaryList[?ServiceName=='$APP_N
         \"ImageConfiguration\": {
           \"Port\": \"3000\",
           \"RuntimeEnvironmentVariables\": {
-            \"PUBLIC_API_BASE_URL\": \"https://$BACKEND_URL\"
+            \"PUBLIC_API_URL\": \"https://$BACKEND_URL\"
           }
         }
       },
@@ -147,7 +147,7 @@ else
         \"ImageConfiguration\": {
           \"Port\": \"3000\",
           \"RuntimeEnvironmentVariables\": {
-            \"PUBLIC_API_BASE_URL\": \"https://$BACKEND_URL\"
+            \"PUBLIC_API_URL\": \"https://$BACKEND_URL\"
           }
         }
       },
@@ -179,7 +179,7 @@ aws apprunner update-service \
         \"Port\": \"3000\",
         \"RuntimeEnvironmentVariables\": {
           \"ORIGIN\": \"https://$FRONTEND_URL\",
-          \"PUBLIC_API_BASE_URL\": \"https://$BACKEND_URL\"
+          \"PUBLIC_API_URL\": \"https://$BACKEND_URL\"
         }
       }
     },

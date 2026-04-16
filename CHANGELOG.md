@@ -6,6 +6,30 @@ Format: `[version] YYYY-MM-DD — description`
 
 ---
 
+## [0.3.3] 2026-04-16 — Consolidate env files and move docker-compose to infra
+
+### Changed
+- **`.env.example`** — Merged root and `backend/.env.example` into a single file at the repo root. Corrected `FRONTEND_URLS` → `FRONTEND_URLS_RAW` to match the actual pydantic-settings field name. Added an inline note explaining that frontend public vars live in `frontend/.env.*` and why they cannot move (Vite requires env files alongside `vite.config.ts`).
+- **`backend/app/core/config.py`** — `env_file` changed from `".env"` to `("../.env", ".env")` so the backend resolves the root-level `.env` whether invoked from `backend/` or the repo root, with a local fallback for convenience.
+- **`docker-compose.yml` → `infra/docker-compose.dev.yml`** — Moved the postgres-only dev compose from the repo root into `infra/`. Fixed the init-SQL volume path from `./docker/postgres/init.sql` to `../docker/postgres/init.sql` to reflect the new location.
+- **`Makefile`** — Updated `make db` and `make db-stop` to pass `-f infra/docker-compose.dev.yml`.
+- **`.gitignore`** — Added explicit `!frontend/.env.development` and `!frontend/.env.production` negations so these non-secret public-var files are tracked despite the broad `.env.*` ignore rule.
+
+### Fixed
+- **`deploy/aws/deploy.sh`, `deploy/gcp/deploy.sh`, `deploy/azure/deploy.sh`** — All three scripts were setting `PUBLIC_API_BASE_URL` but the frontend reads `PUBLIC_API_URL` (imported via `$env/static/public` in `src/lib/config.ts`). Renamed to `PUBLIC_API_URL` so the deployed frontend actually receives the backend URL.
+
+### Removed
+- **`backend/.env.example`** — Deleted; superseded by the consolidated root `.env.example`.
+
+### Docs
+- **`README.md`** — Updated quick-start `cp` command to `cp .env.example .env`. Added `ORIGIN` to the env vars table. Updated project tree to show `infra/docker-compose.dev.yml` instead of the root `docker-compose.yml`.
+- **`deploy/README.md`** — Replaced duplicated env vars table with a reference to the root README. Updated env var names to match actual settings (`APP_ENV` → `ENVIRONMENT`, `SECRET_KEY` → `JWT_SECRET`, `CORS_ORIGINS` → `FRONTEND_URLS_RAW`, `PUBLIC_API_BASE_URL` → `PUBLIC_API_URL`).
+- **`infra/README.md`** — Added `docker-compose.dev.yml` entry to the file table.
+- **`backend/README.md`** — Fixed commands to use `uv run` prefix. Added env file loading note.
+- **`frontend/README.md`** — Replaced scaffolded SvelteKit boilerplate with project-specific commands and env file guidance.
+
+---
+
 ## [0.3.2] 2026-04-10 — Workspace rename to challenger-agent and external Docker network
 
 ### Changed

@@ -38,19 +38,9 @@ Each script is idempotent — safe to re-run to deploy a new image version.
 
 ## Environment variables
 
-Both services read from `.env`. In cloud deployments, pass secrets via the
-provider's native secret/env mechanism — never bake them into images.
-
-Key vars to set in production:
-
-| Variable | Service | Notes |
-|---|---|---|
-| `APP_ENV` | backend | Set to `production` |
-| `SECRET_KEY` | backend | Generate: `openssl rand -hex 32` |
-| `CORS_ORIGINS` | backend | Comma-separated frontend URL(s) |
-| `DATABASE_URL` | backend | Add when using a database |
-| `ORIGIN` | frontend | Required by adapter-node — must match public URL |
-| `PUBLIC_API_BASE_URL` | frontend | Full URL of the backend service |
+See the [root README](../README.md#environment-variables) for the full variable
+reference. In cloud deployments, pass secrets via the provider's native
+secret/env mechanism — never bake them into images.
 
 ---
 

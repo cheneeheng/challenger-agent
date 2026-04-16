@@ -1,42 +1,24 @@
-# sv
+# Frontend
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+SvelteKit 2 + Svelte 5 (runes), TypeScript strict, TailwindCSS 4, Vite 7. See
+the root [README](../README.md) for full development instructions and project
+structure.
 
-## Creating a project
+## Quick reference
 
-If you're seeing this, you've probably already done this step. Congrats!
-
-```sh
-# create a new project
-npx sv create my-app
+```bash
+bun install          # install dependencies
+bun run dev          # dev server on :5173
+bun run build        # production build
+bun run preview      # preview production build
+bun run check        # svelte-check + tsc
+bun run test         # vitest (run once)
+bun run test:coverage
 ```
 
-To recreate this project with the same configuration:
+## Environment
 
-```sh
-# recreate this project
-npx sv create --template minimal --types ts --add tailwindcss="plugins:none" --no-install frontend
-```
-
-## Developing
-
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
-
-```sh
-npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
-```
-
-## Building
-
-To create a production version of your app:
-
-```sh
-npm run build
-```
-
-You can preview the production build with `npm run preview`.
-
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+Public env vars live in `frontend/.env.development` and
+`frontend/.env.production` alongside `vite.config.ts` — Vite requires this.
+See the root [README](../README.md#environment-variables) for the full
+variable reference.

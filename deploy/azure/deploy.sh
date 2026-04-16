@@ -114,7 +114,7 @@ else
     --registry-password "$ACR_PASSWORD" \
     --target-port 3000 \
     --ingress external \
-    --env-vars "PUBLIC_API_BASE_URL=https://$BACKEND_FQDN"
+    --env-vars "PUBLIC_API_URL=https://$BACKEND_FQDN"
 fi
 
 # The FQDN is assigned immediately after create/update. Set ORIGIN in a second

@@ -1,8 +1,18 @@
+---
+doc: 04_LIBRARIES_AND_FRAMEWORKS
+status: ready
+version: 1
+created: 2026-04-18
+scope: Full dependency list (frontend A React, frontend B SvelteKit, backend, dev tooling) with versions, rationale, and rejected libraries
+relates_to:
+  - 01_PROJECT_PLAN
+  - 03_ARCHITECTURE
+  - 06_BACKEND_IMPLEMENTATION
+  - 07_FRONTEND_IMPLEMENTATION
+  - 07_FRONTEND_IMPLEMENTATION_SVELTE
+---
 # LIBRARIES & FRAMEWORKS — IdeaLens
-> Two frontend implementations share one backend. Each frontend has its own dependency set.
-> Both are built and kept in sync; only one is deployed to production at a time.
-> React version details: 07_FRONTEND_IMPLEMENTATION.md
-> SvelteKit version details: 07_FRONTEND_IMPLEMENTATION_SVELTE.md
+**Stack:** React 19 + Vite · SvelteKit · TypeScript · Python 3.12 · FastAPI · PostgreSQL · SQLAlchemy 2.x async · Anthropic SDK
 
 ---
 

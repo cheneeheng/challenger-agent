@@ -1,12 +1,29 @@
+---
+doc: 02_TODOS
+status: ready
+version: 1
+created: 2026-04-18
+scope: All granular checkbox tasks across 5 phases — the single mutable implementation tracker
+relates_to:
+  - 01_PROJECT_PLAN
+  - 03_ARCHITECTURE
+  - 05_INFRASTRUCTURE_AND_DEPLOYMENT_ALT
+  - 05_INFRASTRUCTURE_AND_DEPLOYMENT_AWS
+  - 06_BACKEND_IMPLEMENTATION
+  - 07_FRONTEND_IMPLEMENTATION
+  - 07_FRONTEND_IMPLEMENTATION_SVELTE
+  - 08_LLM_AND_PROMPT
+---
+
 # TODOS — IdeaLens
-> Stack: React + Vite (apps/web-react) · SvelteKit (apps/web-svelte) · Python + FastAPI (apps/api, shared)
-> Pydantic v2 · Anthropic SDK (user key) · PostgreSQL + SQLAlchemy 2.x async + Alembic · Terraform + AWS
->
+**Stack:** React 19 + Vite · SvelteKit · TypeScript · Python 3.12 · FastAPI · PostgreSQL · SQLAlchemy 2.x async · Anthropic SDK · AWS EC2
+
 > Frontend implementation details:
 >   React version    → 07_FRONTEND_IMPLEMENTATION.md
 >   SvelteKit version → 07_FRONTEND_IMPLEMENTATION_SVELTE.md
 > Backend implementation details: see 06_BACKEND_IMPLEMENTATION.md, 08_LLM_AND_PROMPT.md
-> Infrastructure details: see 05_INFRASTRUCTURE_AND_DEPLOYMENT.md
+> Infrastructure details: see 05_INFRASTRUCTURE_AND_DEPLOYMENT_AWS.md (AWS · EC2 + S3/CloudFront + RDS)
+>                         see 05_INFRASTRUCTURE_AND_DEPLOYMENT_ALT.md (Non-AWS · Railway + Neon + Vercel)
 >
 > Notation: tasks marked [React] or [Svelte] are frontend-specific.
 > Tasks with no tag apply to both frontends or to the shared backend/infra.
@@ -320,19 +337,41 @@
 - [x] `infra/Dockerfile.backend` (multi-stage with development and production targets)
 - [-] [React] `apps/web-react/Dockerfile`
 - [x] [Svelte] `infra/Dockerfile.frontend` (multi-stage)
+- [ ] [Svelte] Confirm `infra/Dockerfile.frontend` production stage uses `ENV PUBLIC_API_URL=""` at build time — `PUBLIC_API_URL` is set as a Vercel/Railway env var at deploy time, not baked into the image (cross-origin in production; see §5.7b)
 
-### 5.7 Terraform — AWS Infrastructure
+### 5.7 AWS Infrastructure — Terraform + EC2
+> Primary deployment: EC2 t4g.small (API) + S3/CloudFront (frontend) + RDS, managed via Terraform.
+> See `05_INFRASTRUCTURE_AND_DEPLOYMENT_AWS.md` for full reference.
+
 - [ ] Bootstrap S3 + DynamoDB for Terraform state
-- [ ] Implement all Terraform modules
-- [ ] `terraform.tfvars`: api 512 CPU/1024 MB, web 256 CPU/512 MB, RDS db.t3.micro, ALB idle_timeout=60
+- [ ] Implement all Terraform modules (networking, ecr, rds, secrets, iam, ec2, acm, s3, cloudfront)
+- [ ] `terraform.tfvars`: EC2 t4g.small, RDS db.t3.micro
+- [ ] The EC2 instance runs the API container via Docker; the active frontend image is built into S3/CloudFront at deploy time — Terraform is frontend-agnostic
 - [ ] `terraform plan && terraform apply`
-- [ ] Run `alembic upgrade head` as one-off ECS task on first deploy
+- [ ] Run `alembic upgrade head` via SSH on first deploy
+
+### 5.7b Non-AWS Alternative — Railway + Neon + Vercel
+> Near-free alternative (~$5/month vs ~$26/month for AWS). Choose this instead of §5.7 if cost is a constraint.
+> Railway runs persistent containers — SSE works identically, no serverless concerns.
+> See `05_INFRASTRUCTURE_AND_DEPLOYMENT_ALT.md` for full execution details.
+
+- [ ] Prerequisites: install Railway CLI (`npm i -g @railway/cli`), Vercel CLI, `pg_dump`/`pg_restore`; create Neon (free), Vercel (free), Railway (Hobby $5/month) accounts
+- [ ] **Step 1 — Neon:** provision project, get pooled connection string, convert to `postgresql+asyncpg://`, add SSL to `backend/app/db/base.py`, run Alembic migrations
+- [ ] **Step 2 — Data migration** *(skip if fresh)*: dump RDS → restore to Neon
+- [ ] **Step 3 — Railway backend:** `railway init`, create `backend/railway.toml`, set env vars (`DATABASE_URL`, `JWT_SECRET`, `API_KEY_ENCRYPTION_KEY` — reuse existing values to preserve sessions), `railway up`, verify `/health`
+- [ ] **Step 4 — Vercel frontend:** install `@sveltejs/adapter-vercel`, update `svelte.config.js`, deploy, set `PUBLIC_API_URL=https://idealens-production.up.railway.app`, note assigned Vercel URL
+- [ ] **Step 5 — CORS + cookie** *(code changes)*: `samesite="strict"` → `"lax"` in `backend/app/api/routes/auth.py`; set `FRONTEND_URLS` Railway variable to Vercel URL
+- [ ] **Step 6 — CI/CD:** new `deploy.yml` with Railway + Vercel jobs; add `RAILWAY_TOKEN`, `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID_SVELTE` secrets
+- [ ] **Step 7 — Smoke test:** health, register/login, cookie, SSE stream, graph actions, page refresh, CORS preflight
+- [ ] **Step 8 — AWS teardown** *(only after smoke test passes)*: delete EC2 instance, RDS, S3 buckets, CloudFront distribution, ECR repos, Secrets Manager entries, security groups
 
 ### 5.8 CI/CD
 - [x] `.github/workflows/ci.yaml` — backend lint + test, frontend type-check + test
-- [x] `.github/workflows/deploy-aws.yaml`, `deploy-azure.yaml`, `deploy-gcp.yaml`
+- [ ] `.github/workflows/deploy.yml` — runs `deploy/aws/deploy.sh` on push to `main`
+  - Required GitHub Secrets: `APP_NAME`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `DATABASE_URL`, `JWT_SECRET`, `API_KEY_ENCRYPTION_KEY`
+  - `DEPLOY_FRONTEND` variable (`react` or `svelte`) controls which frontend image is built and pushed
 
 ### 5.9 Documentation
 - [x] Root `README.md`
-- [ ] `infra/README.md`: Terraform bootstrap, first-time setup, deploy guide (current README is high-level only)
+- [ ] `deploy/aws/README.md`: prerequisites, setup-infra → migrate → deploy sequence, secrets reference, how to switch the active frontend via `DEPLOY_FRONTEND`
 - [ ] `backend/app/prompts/README.md`: prompt design + changelog

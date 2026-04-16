@@ -1,4 +1,24 @@
+---
+doc: 01_PROJECT_PLAN
+status: ready
+version: 1
+created: 2026-04-18
+scope: Goals, confirmed stack, user journey, feature set, phases, NFRs, out-of-scope, success criteria
+relates_to:
+  - 02_TODOS
+  - 03_ARCHITECTURE
+  - 04_LIBRARIES_AND_FRAMEWORKS
+  - 05_INFRASTRUCTURE_AND_DEPLOYMENT_AWS
+  - 06_BACKEND_IMPLEMENTATION
+  - 07_FRONTEND_IMPLEMENTATION
+  - 07_FRONTEND_IMPLEMENTATION_SVELTE
+  - 08_LLM_AND_PROMPT
+---
+
 # PROJECT PLAN — IdeaLens
+
+**Stack:** React 19 + Vite · SvelteKit · TypeScript · Python 3.12 · FastAPI · PostgreSQL · SQLAlchemy 2.x async · Anthropic SDK · AWS
+
 > LLM-powered idea analysis and feasibility visualization app
 
 ---

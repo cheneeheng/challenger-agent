@@ -1,6 +1,23 @@
+---
+doc: 06_BACKEND_IMPLEMENTATION
+status: ready
+version: 1
+created: 2026-04-18
+scope: Python/FastAPI implementation patterns — bootstrap, models, auth, encryption, LLM service, SSE, conftest, seed script
+relates_to:
+  - 03_ARCHITECTURE
+  - 04_LIBRARIES_AND_FRAMEWORKS
+  - 06_BACKEND_IMPLEMENTATION_GOOGLE
+  - 08_LLM_AND_PROMPT
+---
 # BACKEND IMPLEMENTATION REFERENCE
-> Authoritative implementation guide for the Python + FastAPI backend.
-> Claude Code: read this before implementing any backend component.
+
+Claude Code: read this before implementing any backend component.
+
+**Stack:** Python 3.12 · FastAPI · PostgreSQL · SQLAlchemy 2.x async · Alembic · Pydantic v2 · Anthropic SDK · Fernet · JWT · pytest
+
+> This is the Anthropic-only baseline. If `LLM_PROVIDER=google` is needed, read
+> `06_BACKEND_IMPLEMENTATION_GOOGLE.md` after this doc — it covers only the delta.
 
 ---
 
@@ -55,10 +72,7 @@ class Settings(BaseSettings):
     API_KEY_ENCRYPTION_KEY: str
 
     # App
-    # Comma-separated list of allowed CORS origins.
-    # Development: set to "http://localhost:3000,http://localhost:3001" to allow both frontends.
-    # Production: set to your production domain (e.g. "https://idealens.app").
-    FRONTEND_URLS: list[str] = ["http://localhost:3000", "http://localhost:3001"]
+    FRONTEND_URLS: list[str] = []       # e.g. ["http://localhost:3000", "http://localhost:3001"]
     ENVIRONMENT: str = "development"    # "development" | "production"
 
     # LLM
@@ -89,7 +103,7 @@ DATABASE_URL=postgresql+asyncpg://idealens:idealens@localhost:5432/idealens
 JWT_SECRET=change-me-generate-with-secrets-token-hex-64
 JWT_ALGORITHM=HS256
 API_KEY_ENCRYPTION_KEY=  # python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-FRONTEND_URLS=http://localhost:3000,http://localhost:3001  # dev: both frontends; prod: your domain only
+FRONTEND_URLS=["http://localhost:3000","http://localhost:3001"]
 ENVIRONMENT=development
 TEST_DATABASE_URL=postgresql+asyncpg://idealens:idealens@localhost:5432/idealens_test
 SEED_ANTHROPIC_API_KEY=  # optional
@@ -142,7 +156,7 @@ def create_app() -> FastAPI:
     # Therefore add CORS first, SecurityHeaders second:
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.FRONTEND_URLS,   # list — covers both dev frontends + prod domain
+        allow_origins=settings.FRONTEND_URLS,
         allow_credentials=True,     # required for httpOnly cookie to be sent
         allow_methods=["*"],
         allow_headers=["*"],

@@ -1,8 +1,22 @@
+---
+doc: 03_ARCHITECTURE
+status: ready
+version: 1
+created: 2026-04-18
+scope: System diagram, networking, repo tree, DB schema (DDL), API endpoints, Pydantic/Zod schemas, data flows, security architecture
+relates_to:
+  - 01_PROJECT_PLAN
+  - 06_BACKEND_IMPLEMENTATION
+  - 07_FRONTEND_IMPLEMENTATION
+  - 07_FRONTEND_IMPLEMENTATION_SVELTE
+  - 08_LLM_AND_PROMPT
+---
+
 # ARCHITECTURE PLAN — IdeaLens
-> Stack: React + Vite (apps/web-react) · SvelteKit (apps/web-svelte) · Python + FastAPI (apps/api) · Pydantic v2 · Anthropic SDK (user key) · PostgreSQL + SQLAlchemy 2.x async + Alembic · Terraform + AWS
->
+**Stack:** React 19 + Vite · SvelteKit · TypeScript · Python 3.12 · FastAPI · PostgreSQL · SQLAlchemy 2.x async · Pydantic v2 · Anthropic SDK · AWS
+
 > Two frontend implementations share one backend, one database, and one infrastructure.
-> Only one frontend is deployed to production at a time — selected via DEPLOY_FRONTEND=react|svelte.
+> Only one frontend is deployed to production at a time — selected via `DEPLOY_FRONTEND=react|svelte`.
 > Frontend A (React): 07_FRONTEND_IMPLEMENTATION.md
 > Frontend B (SvelteKit): 07_FRONTEND_IMPLEMENTATION_SVELTE.md
 
@@ -579,7 +593,7 @@ sqlalchemy.url = postgresql+asyncpg://placeholder
 | Graph size | ≤200 nodes / ≤400 edges — Pydantic field_validator |
 | Model | ALLOWED_MODELS allowlist in Pydantic field_validator |
 | Rate limiting | slowapi: /auth 5/15min IP; /api/chat 30/min user; /api/sessions 60/min user |
-| CORS | FRONTEND_URLS list; allow_credentials=True (dev: both ports 3000+3001; prod: single domain) |
+| CORS | FRONTEND_URL only; allow_credentials=True |
 | Headers | X-Content-Type-Options, X-Frame-Options, Referrer-Policy, HSTS (prod) |
 | Middleware order | SecurityHeaders → CORS → routes (CORS must be inner to handle OPTIONS) |
 | Session ownership | 403 (not 404) when resource exists but belongs to another user |
@@ -587,12 +601,11 @@ sqlalchemy.url = postgresql+asyncpg://placeholder
 | Concurrent send | isStreaming guard blocks second message at UI level |
 | Account delete | Password confirmation + cascade |
 
-CORS `allow_origins` is driven by `settings.FRONTEND_URLS` (a `list[str]` field in `app/config.py`).
-Default covers both dev frontends:
+CORS `allow_origins` in development includes both:
 ```python
 allow_origins=["http://localhost:3000", "http://localhost:3001"]
 ```
-In production, set `FRONTEND_URLS` to only the single deployed frontend origin (e.g. `https://idealens.app`).
+In production, set to only the single deployed frontend origin.
 
 ---
 

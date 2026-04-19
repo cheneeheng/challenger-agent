@@ -3,6 +3,8 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -17,11 +19,13 @@ from app.schemas.chat import ChatRequest
 from app.services import encryption_service, llm_service
 
 router = APIRouter()
+limiter = Limiter(key_func=get_remote_address)
 
 _SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
 
 
 @router.post("/api/chat")
+@limiter.limit("30/minute")
 async def chat(
     request: Request,
     body: ChatRequest,

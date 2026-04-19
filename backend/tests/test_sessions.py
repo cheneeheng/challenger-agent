@@ -296,3 +296,104 @@ async def test_get_session_forbidden_for_other_user(
         f"/api/sessions/{test_session.id}", headers=other_headers
     )
     assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_add_system_message(
+    client: AsyncClient, auth_headers, test_session
+):
+    resp = await client.post(
+        f"/api/sessions/{test_session.id}/messages",
+        json={"role": "system", "content": "[User action: edited node]"},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 201
+
+    # Confirm message appears in session
+    get_resp = await client.get(
+        f"/api/sessions/{test_session.id}", headers=auth_headers
+    )
+    messages = get_resp.json()["messages"]
+    assert any(m["content"] == "[User action: edited node]" for m in messages)
+
+
+@pytest.mark.asyncio
+async def test_add_system_message_default_role(
+    client: AsyncClient, auth_headers, test_session
+):
+    """Role defaults to 'system' when omitted."""
+    resp = await client.post(
+        f"/api/sessions/{test_session.id}/messages",
+        json={"content": "[User action: auto role]"},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 201
+
+
+@pytest.mark.asyncio
+async def test_add_system_message_invalid_role(
+    client: AsyncClient, auth_headers, test_session
+):
+    resp = await client.post(
+        f"/api/sessions/{test_session.id}/messages",
+        json={"role": "assistant", "content": "not allowed"},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_add_system_message_not_found(client: AsyncClient, auth_headers):
+    resp = await client.post(
+        "/api/sessions/00000000-0000-0000-0000-000000000000/messages",
+        json={"content": "test"},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_add_system_message_forbidden(
+    client: AsyncClient, test_session, db: AsyncSession
+):
+    from app.db.models.user import User
+    from app.services.auth_service import create_access_token, hash_password
+
+    other = User(email="msg-other@example.com", name="O", password_hash=hash_password("p"))
+    db.add(other)
+    await db.flush()
+    resp = await client.post(
+        f"/api/sessions/{test_session.id}/messages",
+        json={"content": "test"},
+        headers={"Authorization": f"Bearer {create_access_token(other.id)}"},
+    )
+    assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_add_system_message_increments_index(
+    client: AsyncClient, auth_headers, test_session, db: AsyncSession
+):
+    """Second message gets index 1 when first is index 0."""
+    from app.db.models.message import Message
+
+    first = Message(
+        session_id=test_session.id, role="user", content="first", message_index=0
+    )
+    db.add(first)
+    await db.flush()
+
+    resp = await client.post(
+        f"/api/sessions/{test_session.id}/messages",
+        json={"content": "system note"},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 201
+
+    get_resp = await client.get(
+        f"/api/sessions/{test_session.id}", headers=auth_headers
+    )
+    messages = get_resp.json()["messages"]
+    indices = [m["message_index"] for m in messages]
+    assert sorted(indices) == indices  # ordered ascending
+    assert len(set(indices)) == len(indices)  # unique

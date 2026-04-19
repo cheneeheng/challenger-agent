@@ -39,9 +39,9 @@ uv run pytest --no-cov                         # Tests without coverage
 uv run pytest tests/path/test_file.py::test_name  # Single test
 uv run alembic upgrade head                    # Apply DB migrations
 uv run alembic revision --autogenerate -m "desc"  # Generate migration
-ruff check .                                   # Lint
-ruff format .                                  # Format
-ruff check --fix .                             # Lint + auto-fix
+uv run ruff check .                            # Lint
+uv run ruff format .                           # Format
+uv run ruff check --fix .                      # Lint + auto-fix
 
 # Frontend (from frontend/)
 bun run dev       # Dev server
@@ -78,7 +78,7 @@ db/
   models/             # User, RefreshToken, Session, Message
   session.py          # Async DB session factory (expire_on_commit=False)
   base.py             # Async engine + AsyncSessionLocal
-tests/                # 98 tests, 99% coverage
+tests/                # 104 tests, 99% coverage
 ```
 
 Routes call services; services own business logic and call models/db. Schemas are strictly input/output contracts — no model objects leak into API responses.
@@ -87,13 +87,14 @@ Routes call services; services own business logic and call models/db. Schemas ar
 
 ```
 routes/               # File-based routing (+page.svelte, +layout.svelte, +page.ts)
+  +error.svelte       # Global error boundary (404/500)
   (protected)/        # Auth-guarded routes; (requires-api-key)/ nested inside
 lib/
-  components/         # chat/, graph/, layout/ subdirectories
+  components/         # chat/, graph/ (incl. AddNodeModal.svelte), layout/ subdirectories
   stores/             # authStore, chatStore, graphStore, sessionStore
-  services/           # authService, chatService, sessionService, userService
+  services/           # authService, chatService (+ chatService.test.ts), sessionService, userService
   schemas/            # graph.ts — Zod schemas for LLM graph actions
-  utils/              # graphLayout.ts (Dagre), graphStyles.ts, debounce.ts
+  utils/              # graphLayout.ts (Dagre), graphStyles.ts, debounce.ts, graphGuards.ts
 ```
 
 Svelte 5 runes syntax (`$props()`, `$state()`, `$derived()`, `{@render ...}`). TailwindCSS v4 — configured via Vite plugin, no `tailwind.config.js`.
@@ -127,3 +128,6 @@ Use `$effect(() => { ... })` instead. Add `setTimeout(..., 0)` if DOM measuremen
 
 **Test DB session must match production `AsyncSessionLocal`:**
 `AsyncSession(..., expire_on_commit=False)` is required in test fixtures. Without it, `db.commit()` mid-request expires attributes and triggers `MissingGreenlet` errors in async route handlers.
+
+**Vitest `vi.mock` factory must use dynamic `import()`, not `require()`:**
+SvelteKit runs Vitest in ESM mode. Using `require('svelte/store')` inside a `vi.mock(...)` factory causes a `svelte-check` error "Cannot find name 'require'". Always use `async () => { const { x } = await import('...') }` instead.

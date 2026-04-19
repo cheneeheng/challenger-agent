@@ -5,7 +5,15 @@
   import { get } from 'svelte/store'
   import { updateGraph } from '$lib/services/sessionService'
 
-  let { nodeId }: { nodeId: string } = $props()
+  let {
+    nodeId,
+    onSystemMessage,
+    handleAskClaude,
+  }: {
+    nodeId: string
+    onSystemMessage?: (msg: string) => void
+    handleAskClaude?: (text: string) => void
+  } = $props()
 
   const node = $derived($graphStore.nodes.find((n) => n.id === nodeId) ?? null)
   const style = $derived(node ? getNodeStyle(node.type) : null)
@@ -24,8 +32,10 @@
 
   async function saveEdit() {
     if (!node) return
+    const prevContent = node.content
     graphStore.updateNode(node.id, { content: contentDraft })
     editingContent = false
+    onSystemMessage?.(`[User action: edited node "${node.label}" — content updated]`)
     const { currentSessionId } = get(sessionStore)
     if (currentSessionId) {
       const { nodes, edges } = get(graphStore)
@@ -35,6 +45,7 @@
 
   function handleDelete() {
     if (!node || node.type === 'root') return
+    onSystemMessage?.(`[User action: deleted node "${node.label}"]`)
     graphStore.deleteNode(node.id)
     const { currentSessionId } = get(sessionStore)
     if (currentSessionId) {
@@ -42,7 +53,19 @@
       updateGraph(currentSessionId, { nodes, edges } as Record<string, unknown>)
     }
   }
+
+  function handleAskClaudeClick() {
+    if (!node) return
+    handleAskClaude?.(`Tell me more about: ${node.label}`)
+    graphStore.setSelectedNodeId(null)
+  }
+
+  function handleKeydown(e: KeyboardEvent) {
+    if (e.key === 'Escape') graphStore.setSelectedNodeId(null)
+  }
 </script>
+
+<svelte:window onkeydown={handleKeydown} />
 
 {#if node && style}
   <div
@@ -89,13 +112,21 @@
       </div>
     {:else}
       <p class="text-xs opacity-80 leading-relaxed mb-3">{node.content}</p>
-      <div class="flex gap-2">
+      <div class="flex flex-wrap gap-2">
         <button
           onclick={startEdit}
           class="text-xs bg-white/10 hover:bg-white/20 px-3 py-1 rounded transition-colors"
         >
           Edit
         </button>
+        {#if handleAskClaude}
+          <button
+            onclick={handleAskClaudeClick}
+            class="text-xs bg-white/10 hover:bg-white/20 px-3 py-1 rounded transition-colors"
+          >
+            Ask Claude
+          </button>
+        {/if}
         {#if node.type !== 'root'}
           <button
             onclick={handleDelete}

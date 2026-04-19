@@ -1,12 +1,11 @@
 import { API_BASE_URL } from '$lib/config'
 import { authStore } from '$lib/stores/authStore'
-import { llmGraphActionSchema, type LLMGraphAction } from '$lib/schemas/graph'
 import { get } from 'svelte/store'
 import type { AnalysisGraph } from '$lib/schemas/graph'
 
 export interface SSECallbacks {
   onToken: (token: string) => void
-  onGraphAction: (action: LLMGraphAction) => void
+  onGraphAction: (action: unknown) => void
   onError: (msg: string) => void
   onDone: () => void
 }
@@ -88,12 +87,9 @@ export async function streamChat(
       } else if (eventType === 'graph_action') {
         try {
           const raw = JSON.parse(data)
-          const parsed = llmGraphActionSchema.safeParse(raw)
-          if (parsed.success) {
-            callbacks.onGraphAction(parsed.data)
-          }
+          callbacks.onGraphAction(raw)
         } catch {
-          // ignore malformed action
+          // ignore malformed JSON
         }
       } else if (eventType === 'error') {
         callbacks.onError(data)

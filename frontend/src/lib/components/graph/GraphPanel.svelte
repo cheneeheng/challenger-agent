@@ -21,6 +21,14 @@
   import GraphToolbar from './GraphToolbar.svelte'
   import NodeDetailPanel from './NodeDetailPanel.svelte'
 
+  let {
+    onSystemMessage,
+    handleAskClaude,
+  }: {
+    onSystemMessage?: (msg: string) => void
+    handleAskClaude?: (text: string) => void
+  } = $props()
+
   const rfNodes = derived(graphStore, ($g) =>
     $g.nodes.map(
       (n) =>
@@ -74,10 +82,18 @@
 
   function ondelete({ nodes, edges }: { nodes: Node[]; edges: Edge[] }) {
     for (const n of nodes) {
-      if (n.id !== 'root') graphStore.deleteNode(n.id)
+      if (n.id !== 'root') {
+        onSystemMessage?.(`[User action: deleted node "${n.data?.label ?? n.id}"]`)
+        graphStore.deleteNode(n.id)
+      }
     }
     for (const e of edges) {
       graphStore.deleteEdge(e.id)
+    }
+    const { currentSessionId } = get(sessionStore)
+    if (currentSessionId) {
+      const { nodes: gn, edges: ge } = get(graphStore)
+      updateGraph(currentSessionId, { nodes: gn, edges: ge } as Record<string, unknown>)
     }
   }
 </script>
@@ -99,10 +115,14 @@
     <MiniMap nodeColor="#4b5563" maskColor="rgba(0,0,0,0.7)" />
   </SvelteFlow>
 
-  <GraphToolbar />
+  <GraphToolbar {onSystemMessage} />
 
   {#if selectedNodeId}
-    <NodeDetailPanel nodeId={selectedNodeId} />
+    <NodeDetailPanel
+      nodeId={selectedNodeId}
+      {onSystemMessage}
+      {handleAskClaude}
+    />
   {/if}
 </div>
 

@@ -1,6 +1,7 @@
 import { writable, get } from 'svelte/store'
 import { v4 as uuidv4 } from 'uuid'
-import type { LLMGraphAction, AnalysisGraph, AnalysisNode, AnalysisEdge } from '$lib/schemas/graph'
+import { llmGraphActionSchema, type LLMGraphAction, type AnalysisGraph, type AnalysisNode, type AnalysisEdge } from '$lib/schemas/graph'
+import { getIncrementalPosition } from '$lib/utils/graphLayout'
 
 interface GraphState {
   nodes: AnalysisNode[]
@@ -69,20 +70,21 @@ function createGraphStore() {
       }))
     },
 
-    applyGraphActions(actions: LLMGraphAction[]) {
+    applyGraphActions(rawActions: unknown[]) {
       update((s) => {
         let { nodes, edges } = s
 
-        for (const action of actions) {
+        for (const raw of rawActions) {
+          const parsed = llmGraphActionSchema.safeParse(raw)
+          if (!parsed.success) continue
+          const action = parsed.data
+
           if (action.action === 'add') {
             const p = action.payload
             // Don't add if ID already exists
             if (nodes.find((n) => n.id === p.id)) continue
 
-            const parent = p.parent_id ? nodes.find((n) => n.id === p.parent_id) : null
-            const position = parent
-              ? { x: parent.position.x + 220, y: parent.position.y + 100 }
-              : { x: 200 + Math.random() * 400, y: 100 + Math.random() * 300 }
+            const position = getIncrementalPosition(p.parent_id, nodes)
 
             nodes = [
               ...nodes,

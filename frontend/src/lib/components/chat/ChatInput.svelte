@@ -2,26 +2,35 @@
   let {
     disabled = false,
     onSend,
-  }: { disabled?: boolean; onSend: (text: string) => void } = $props()
+    prefillText = '',
+  }: { disabled?: boolean; onSend: (text: string) => void; prefillText?: string } = $props()
 
   let input = $state('')
 
-  function handleSubmit(e: SubmitEvent) {
-    e.preventDefault()
+  // Apply prefill when it changes externally (e.g. "Ask Claude about this")
+  $effect(() => {
+    if (prefillText) {
+      input = prefillText
+    }
+  })
+
+  function submit() {
     const text = input.trim()
     if (!text || disabled) return
     onSend(text)
     input = ''
   }
 
+  function handleSubmit(e: SubmitEvent) {
+    e.preventDefault()
+    submit()
+  }
+
   function handleKeydown(e: KeyboardEvent) {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    // Enter without Shift or Cmd/Ctrl+Enter both send
+    if (e.key === 'Enter' && (!e.shiftKey || e.metaKey || e.ctrlKey)) {
       e.preventDefault()
-      const text = input.trim()
-      if (text && !disabled) {
-        onSend(text)
-        input = ''
-      }
+      submit()
     }
   }
 </script>
@@ -31,7 +40,7 @@
     bind:value={input}
     onkeydown={handleKeydown}
     {disabled}
-    placeholder={disabled ? 'Waiting for response…' : 'Ask a follow-up question…'}
+    placeholder={disabled ? 'Waiting for response…' : 'Ask a follow-up question… (Enter to send, Shift+Enter for newline)'}
     rows={2}
     class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 resize-none disabled:opacity-50"
   ></textarea>

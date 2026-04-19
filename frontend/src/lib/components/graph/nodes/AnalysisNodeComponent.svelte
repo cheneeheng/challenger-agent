@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Handle, Position } from '@xyflow/svelte'
+  import { scale } from 'svelte/transition'
   import { getNodeStyle } from '$lib/utils/graphStyles'
   import type { AnalysisNode } from '$lib/schemas/graph'
 
@@ -9,6 +10,7 @@
 </script>
 
 <div
+  in:scale={{ duration: 200, start: 0.85 }}
   class="rounded-lg border-2 px-3 py-2 min-w-[160px] max-w-[200px] text-left shadow-lg {style.bg} {style.border} {style.text}"
 >
   <Handle type="target" position={Position.Left} class="!bg-gray-500" />

@@ -30,3 +30,15 @@ class MessageResponse(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class AddMessageRequest(BaseModel):
+    content: str
+    role: str = "system"
+
+    @field_validator("role")
+    @classmethod
+    def validate_role(cls, v: str) -> str:
+        if v not in ("system",):
+            raise ValueError("Only 'system' role messages may be added via this endpoint")
+        return v

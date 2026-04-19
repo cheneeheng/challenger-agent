@@ -18,6 +18,7 @@ on:
 
 jobs:
   deploy:
+    if: false  # disabled — re-enable by removing this line
     runs-on: ubuntu-latest
     env:
       APP_NAME: ${{ secrets.APP_NAME }}

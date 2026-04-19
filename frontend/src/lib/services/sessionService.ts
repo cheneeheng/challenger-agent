@@ -74,3 +74,13 @@ export async function updateGraph(
 ): Promise<void> {
   await apiClient.put(`/api/sessions/${id}/graph`, { graph_state })
 }
+
+export async function addSystemMessage(
+  sessionId: string,
+  content: string
+): Promise<void> {
+  await apiClient.post(`/api/sessions/${sessionId}/messages`, {
+    role: 'system',
+    content,
+  })
+}

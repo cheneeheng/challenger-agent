@@ -4,7 +4,7 @@ An LLM-powered idea analysis tool. Describe any idea in natural language; Claude
 knowledge graph — nodes for concepts, requirements, benefits, flaws, gaps, alternatives — while
 you chat. Edit nodes directly, ask follow-up questions, and watch the graph evolve in real time.
 
-Version: 0.3.4
+Version: 0.3.5
 
 ---
 
@@ -27,14 +27,17 @@ Version: 0.3.4
 ## Features
 
 - **Streaming analysis** — Claude streams tokens and graph actions over SSE in real time
-- **Live knowledge graph** — nodes auto-positioned with Dagre layout after each response
+- **Live knowledge graph** — nodes auto-positioned with Dagre layout after each response; animated entry transitions
 - **10 node types** — concept, requirement, benefit, drawback, gap, flaw, feasibility, alternative, question, root
-- **Session persistence** — graph state, chat history, and model selection saved to PostgreSQL
+- **Session persistence** — graph state, chat history (including system action messages), and model selection saved to PostgreSQL
 - **Context window management** — older messages auto-summarised when session grows large
 - **SSE reconnection** — `Last-Event-ID` replay on reconnect
 - **User API key** — each user supplies their own Anthropic key; stored Fernet-encrypted, decrypted only in memory
 - **Multi-model** — Haiku (fast), Sonnet (default), Opus (thorough)
+- **Graph editing** — add nodes (9 types), delete nodes, auto-layout, drag to reposition; edits reflected in chat history
+- **Node detail panel** — view/edit node content; "Ask Claude" pre-fills chat input; Escape to close
 - **Settings** — profile, password, API key management, account deletion
+- **Error boundaries** — `<svelte:boundary>` in the session workspace; `+error.svelte` for 404/500 pages
 
 ---
 
@@ -188,14 +191,27 @@ pre-commit run --all-files
 ## Test coverage
 
 ```
-Backend:  98 tests · 99% coverage
-Frontend: 62 tests (stores, schemas, utilities)
+Backend:  104 tests · 99% coverage  (requires PostgreSQL — see CLAUDE.md)
+Frontend:  81 tests (stores, schemas, utilities, SSE parser)
+Deploy:     9 tests (syntax + required-variable enforcement)
 ```
 
-Run backend coverage report:
+Run backend coverage report (PostgreSQL must be running):
 
 ```bash
 cd backend && uv run pytest
+```
+
+Run frontend tests:
+
+```bash
+cd frontend && bun run test
+```
+
+Run deploy script tests (no database required):
+
+```bash
+bash deploy/tests/test_deploy_scripts.sh
 ```
 
 ---
@@ -216,15 +232,13 @@ cd backend && uv run pytest
 
 ## What's not yet built
 
-See [`docs/plan/02_TODOS.md`](docs/plan/02_TODOS.md) for the full status. Key remaining items:
+See [`docs/plan/02_TODOS.md`](docs/plan/02_TODOS.md) for the full status. Deferred items:
 
-- Rate limit decorators on individual routes (slowapi is wired, not applied)
-- Graph → Chat feedback loop (system messages when user edits nodes manually)
-- Graph toolbar: Add Node, Add Edge, Delete Selected actions
+- "Add Edge" toolbar button (requires SvelteFlow connection-mode toggle)
 - Node right-click context menu
-- Graph animations (node enter/exit transitions)
-- Dashboard pagination and delete undo
-- Terraform infrastructure
+- Node exit animations and update highlight pulse (entry animation is done)
+- Dashboard "Load more" pagination (first 20 sessions shown; API supports pagination)
+- User avatar dropdown
 - E2E Playwright tests
 
 ---

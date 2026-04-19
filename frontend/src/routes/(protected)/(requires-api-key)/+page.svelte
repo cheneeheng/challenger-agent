@@ -3,7 +3,6 @@
   import { onMount } from 'svelte'
   import { toast } from 'svelte-sonner'
   import { authStore } from '$lib/stores/authStore'
-  import { sessionStore } from '$lib/stores/sessionStore'
   import { listSessions, createSession, deleteSession } from '$lib/services/sessionService'
   import { formatDistanceToNow } from 'date-fns'
 
@@ -46,15 +45,50 @@
     }
   }
 
-  async function handleDelete(id: string, e: MouseEvent) {
+  function handleDelete(id: string, e: MouseEvent) {
     e.stopPropagation()
-    try {
-      await deleteSession(id)
-      sessions = sessions.filter((s) => s.id !== id)
-      toast.success('Session deleted')
-    } catch {
-      toast.error('Failed to delete session')
-    }
+    // Optimistic removal with 5s undo window
+    const target = sessions.find((s) => s.id === id)
+    if (!target) return
+    sessions = sessions.filter((s) => s.id !== id)
+
+    let undone = false
+    const undoId = toast('Session deleted', {
+      action: {
+        label: 'Undo',
+        onClick: () => {
+          undone = true
+          sessions = [target, ...sessions].sort(
+            (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+          )
+        },
+      },
+      duration: 5000,
+      onDismiss: async () => {
+        if (!undone) {
+          try {
+            await deleteSession(id)
+          } catch {
+            sessions = [target, ...sessions].sort(
+              (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+            )
+            toast.error('Failed to delete session')
+          }
+        }
+      },
+      onAutoClose: async () => {
+        if (!undone) {
+          try {
+            await deleteSession(id)
+          } catch {
+            sessions = [target, ...sessions].sort(
+              (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+            )
+            toast.error('Failed to delete session')
+          }
+        }
+      },
+    })
   }
 
   function formatDate(dateStr: string) {
@@ -64,11 +98,20 @@
       return dateStr
     }
   }
+
+  function handleGlobalKeydown(e: KeyboardEvent) {
+    if (e.key === 'Escape' && showNewModal) {
+      showNewModal = false
+      newIdea = ''
+    }
+  }
 </script>
 
 <svelte:head>
   <title>Dashboard — IdeaLens</title>
 </svelte:head>
+
+<svelte:window onkeydown={handleGlobalKeydown} />
 
 <div class="min-h-screen bg-gray-950 text-white">
   <!-- Header -->
@@ -102,7 +145,23 @@
     </div>
 
     {#if isLoading}
-      <div class="text-center py-20 text-gray-500">Loading…</div>
+      <!-- Loading skeletons -->
+      <div class="grid gap-4">
+        {#each [1, 2, 3] as _}
+          <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 animate-pulse">
+            <div class="flex items-start justify-between gap-4">
+              <div class="flex-1 space-y-2">
+                <div class="h-4 bg-gray-700 rounded w-1/3"></div>
+                <div class="h-3 bg-gray-800 rounded w-2/3"></div>
+              </div>
+              <div class="flex gap-2">
+                <div class="h-5 w-12 bg-gray-800 rounded"></div>
+                <div class="h-5 w-20 bg-gray-800 rounded"></div>
+              </div>
+            </div>
+          </div>
+        {/each}
+      </div>
     {:else if sessions.length === 0}
       <div class="text-center py-20">
         <p class="text-gray-400 text-lg mb-2">No analyses yet.</p>
@@ -113,7 +172,6 @@
     {:else}
       <div class="grid gap-4">
         {#each sessions as session (session.id)}
-          <!-- Use div+role instead of button to allow nested interactive elements -->
           <div
             role="button"
             tabindex="0"
@@ -152,6 +210,7 @@
     class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4"
     role="dialog"
     aria-modal="true"
+    aria-label="New analysis"
   >
     <div class="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-lg p-6">
       <h2 class="text-xl font-semibold mb-4">New Analysis</h2>

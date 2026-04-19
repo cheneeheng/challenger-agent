@@ -1,7 +1,9 @@
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response, status
 from jose import JWTError
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,6 +21,7 @@ from app.services.auth_service import (
 )
 
 router = APIRouter(prefix="/auth")
+limiter = Limiter(key_func=get_remote_address)
 
 
 def _set_refresh_cookie(response: Response, token: str) -> None:
@@ -39,7 +42,9 @@ def _clear_refresh_cookie(response: Response) -> None:
 
 
 @router.post("/register", response_model=TokenResponse, status_code=201)
+@limiter.limit("5/15minutes")
 async def register(
+    request: Request,
     body: RegisterRequest,
     response: Response,
     db: AsyncSession = Depends(get_db),
@@ -71,7 +76,9 @@ async def register(
 
 
 @router.post("/login", response_model=TokenResponse)
+@limiter.limit("5/15minutes")
 async def login(
+    request: Request,
     body: LoginRequest,
     response: Response,
     db: AsyncSession = Depends(get_db),

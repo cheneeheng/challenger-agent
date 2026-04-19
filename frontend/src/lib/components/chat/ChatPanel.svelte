@@ -4,7 +4,7 @@
   import ChatInput from './ChatInput.svelte'
   import ModelSelector from './ModelSelector.svelte'
 
-  let { onSend }: { onSend: (text: string) => void } = $props()
+  let { onSend, prefillText = '' }: { onSend: (text: string) => void; prefillText?: string } = $props()
 
   let messagesEl: HTMLDivElement | undefined = $state()
 
@@ -63,6 +63,6 @@
 
   <!-- Input -->
   <div class="shrink-0">
-    <ChatInput disabled={$chatStore.isStreaming} {onSend} />
+    <ChatInput disabled={$chatStore.isStreaming} {onSend} {prefillText} />
   </div>
 </div>

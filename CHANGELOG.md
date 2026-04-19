@@ -6,6 +6,29 @@ Format: `[version] YYYY-MM-DD — description`
 
 ---
 
+## [0.3.5] 2026-04-19 — System message persistence, node entry animation, CI hardening
+
+### Added
+- **`backend/app/api/routes/sessions.py`** — New `POST /api/sessions/{session_id}/messages` endpoint. Accepts `{ role: "system", content: "..." }` and appends a `Message` row with a correctly sequenced `message_index` (uses `SELECT MAX ... FOR UPDATE` to prevent races). 403 on wrong user, 404 on missing session.
+- **`backend/app/schemas/chat.py`** — `AddMessageRequest` schema with a `@field_validator` that restricts `role` to `"system"`, preventing clients from injecting `user` or `assistant` messages via this endpoint.
+- **`backend/tests/test_sessions.py`** — 6 new tests: happy-path 201 and message appears in GET, default role, invalid role → 422, not found → 404, forbidden → 403, sequential `message_index` increment.
+- **`frontend/src/lib/services/sessionService.ts`** — `addSystemMessage(sessionId, content)` — thin wrapper around `POST /api/sessions/{id}/messages` used for fire-and-forget system message persistence.
+- **`frontend/src/lib/components/graph/nodes/AnalysisNodeComponent.svelte`** — `in:scale={{ duration: 200, start: 0.85 }}` transition on the node wrapper `<div>`. Nodes now scale in smoothly when Claude adds them to the graph.
+- **`.github/workflows/ci.yaml`** — New `deploy-scripts` CI job that runs `bash deploy/tests/test_deploy_scripts.sh` (9 tests: syntax checks, required-variable enforcement, Dockerfile verification) on every push and pull request.
+
+### Changed
+- **`frontend/src/routes/(protected)/(requires-api-key)/session/[id]/+page.svelte`** — `handleSystemMessage` now calls `addSystemMessage` (fire-and-forget, failure is silent) after adding the message to `chatStore`, so node-edit and node-delete system messages survive page reload.
+- **`.github/workflows/ci.yaml`** — Changed trigger from `workflow_dispatch`-only to `push` (branches: `main`, `feat/**`, `fix/**`) + `pull_request` + `workflow_dispatch`. CI now runs automatically on every push and PR instead of only when manually triggered.
+
+### Fixed
+- **`frontend/src/lib/services/chatService.test.ts`** — Pre-existing `svelte-check` error: `vi.mock` factory used CommonJS `require('svelte/store')`, which is invalid in an ESM context. Converted to `async () => { const { writable } = await import('svelte/store') }`. `svelte-check` now reports 0 errors/warnings.
+
+### Docs
+- **`docs/plan/02_TODOS.md`** — Complete re-audit against the live codebase. All completed items marked `[x]`, deferred or N/A items marked `[-]` with an inline reason (e.g. Add Edge, right-click menu, Terraform/ECS, E2E Playwright), remaining open items left `[ ]`. Rate limiting, SSE reconnection, system message persistence, node entry animation, and deploy script testing all marked `[x]`.
+- **`README.md`** — Version bump 0.3.4 → 0.3.5. Features section updated (system message persistence, entry animation). Test coverage counts updated (104 backend, 81 frontend, 9 deploy). "What's not yet built" trimmed to genuinely unbuilt items only. Backend test note clarifies PostgreSQL requirement. Deploy test command added.
+
+---
+
 ## [0.3.4] 2026-04-16 — AWS infrastructure setup, deploy script overhaul, .env sourcing
 
 ### Added

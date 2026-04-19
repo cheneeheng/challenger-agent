@@ -211,4 +211,16 @@ describe('graphStore — applyGraphActions', () => {
     expect(edge.label).toBe('causes')
     expect(edge.type).toBe('causal')
   })
+
+  it('silently drops invalid actions that fail Zod validation', () => {
+    graphStore.applyGraphActions([
+      { action: 'unknown', payload: {} },         // unknown action type
+      'not-an-object',                             // wrong type entirely
+      { action: 'add' },                           // missing payload
+      null,
+    ])
+    // Root node is still the only node
+    expect(get(graphStore).nodes).toHaveLength(1)
+    expect(get(graphStore).edges).toHaveLength(0)
+  })
 })

@@ -1,14 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.db.models.message import Message as DBMessage
 from app.db.models.session import Session as DBSession
 from app.db.models.user import User
 from app.db.session import get_db
 from app.dependencies.auth import get_current_user
-from app.db.models.message import Message as DBMessage
-from app.schemas.chat import MessageResponse
+from app.schemas.chat import AddMessageRequest, MessageResponse
 from app.schemas.session import (
     CreateSessionRequest,
     SessionListItem,
@@ -18,7 +20,9 @@ from app.schemas.session import (
     UpdateSessionRequest,
 )
 
+
 router = APIRouter(prefix="/api/sessions")
+limiter = Limiter(key_func=get_remote_address)
 
 
 def _build_initial_graph(idea: str) -> dict:
@@ -62,7 +66,9 @@ def _to_response(
 
 
 @router.get("", response_model=SessionListResponse)
+@limiter.limit("60/minute")
 async def list_sessions(
+    request: Request,
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
     current_user: User = Depends(get_current_user),
@@ -93,7 +99,9 @@ async def list_sessions(
 
 
 @router.post("", response_model=SessionResponse, status_code=201)
+@limiter.limit("60/minute")
 async def create_session(
+    request: Request,
     body: CreateSessionRequest,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -169,6 +177,35 @@ async def delete_session(
     if session.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
     await db.delete(session)
+
+
+@router.post("/{session_id}/messages", status_code=201)
+async def add_message(
+    session_id: str,
+    body: AddMessageRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    session = await db.get(DBSession, session_id)
+    if not session:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    if session.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+    result = await db.execute(
+        select(func.max(DBMessage.message_index))
+        .where(DBMessage.session_id == session_id)
+        .with_for_update()
+    )
+    max_index = result.scalar() or -1
+    db.add(
+        DBMessage(
+            session_id=session_id,
+            role=body.role,
+            content=body.content,
+            message_index=max_index + 1,
+        )
+    )
 
 
 @router.put("/{session_id}/graph", status_code=204)

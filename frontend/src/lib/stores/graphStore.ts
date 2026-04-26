@@ -1,7 +1,13 @@
 import { writable, get } from 'svelte/store'
 import { v4 as uuidv4 } from 'uuid'
-import { llmGraphActionSchema, type LLMGraphAction, type AnalysisGraph, type AnalysisNode, type AnalysisEdge } from '$lib/schemas/graph'
+import { llmGraphActionSchema, type AnalysisGraph, type AnalysisNode, type AnalysisEdge } from '$lib/schemas/graph'
 import { getIncrementalPosition } from '$lib/utils/graphLayout'
+
+// Signals fitView to run (inside SvelteFlow context). Increment to trigger.
+export const fitViewSignal = writable(0)
+
+// Node IDs currently showing the update-highlight pulse.
+export const highlightedNodeIds = writable<Set<string>>(new Set())
 
 interface GraphState {
   nodes: AnalysisNode[]
@@ -73,6 +79,7 @@ function createGraphStore() {
     applyGraphActions(rawActions: unknown[]) {
       update((s) => {
         let { nodes, edges } = s
+        let nodesAdded = false
 
         for (const raw of rawActions) {
           const parsed = llmGraphActionSchema.safeParse(raw)
@@ -99,6 +106,7 @@ function createGraphStore() {
                 userPositioned: false,
               },
             ]
+            nodesAdded = true
           } else if (action.action === 'update') {
             const p = action.payload
             nodes = nodes.map((n) =>
@@ -110,6 +118,9 @@ function createGraphStore() {
                   }
                 : n
             )
+            // 2s highlight pulse for updated nodes
+            highlightedNodeIds.update((s) => { s.add(p.id); return new Set(s) })
+            setTimeout(() => highlightedNodeIds.update((s) => { s.delete(p.id); return new Set(s) }), 2000)
           } else if (action.action === 'delete') {
             const { id } = action.payload
             if (id !== 'root') {
@@ -132,6 +143,10 @@ function createGraphStore() {
               ]
             }
           }
+        }
+
+        if (nodesAdded) {
+          setTimeout(() => fitViewSignal.update((n) => n + 1), 500)
         }
 
         return { ...s, nodes, edges }

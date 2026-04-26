@@ -119,7 +119,9 @@ async def create_session(
 
 
 @router.get("/{session_id}", response_model=SessionResponse)
+@limiter.limit("60/minute")
 async def get_session(
+    request: Request,
     session_id: str,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -138,7 +140,9 @@ async def get_session(
 
 
 @router.patch("/{session_id}", response_model=SessionResponse)
+@limiter.limit("60/minute")
 async def update_session(
+    request: Request,
     session_id: str,
     body: UpdateSessionRequest,
     current_user: User = Depends(get_current_user),
@@ -166,7 +170,9 @@ async def update_session(
 
 
 @router.delete("/{session_id}", status_code=204)
+@limiter.limit("60/minute")
 async def delete_session(
+    request: Request,
     session_id: str,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -180,7 +186,9 @@ async def delete_session(
 
 
 @router.post("/{session_id}/messages", status_code=201)
+@limiter.limit("60/minute")
 async def add_message(
+    request: Request,
     session_id: str,
     body: AddMessageRequest,
     current_user: User = Depends(get_current_user),
@@ -209,7 +217,9 @@ async def add_message(
 
 
 @router.put("/{session_id}/graph", status_code=204)
+@limiter.limit("60/minute")
 async def update_graph(
+    request: Request,
     session_id: str,
     body: UpdateGraphRequest,
     current_user: User = Depends(get_current_user),

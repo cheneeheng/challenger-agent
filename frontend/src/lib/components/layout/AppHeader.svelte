@@ -3,6 +3,7 @@
   import { authStore } from '$lib/stores/authStore'
   import { sessionStore } from '$lib/stores/sessionStore'
   import { updateSession } from '$lib/services/sessionService'
+  import { logout as apiLogout } from '$lib/services/authService'
   import { toast } from 'svelte-sonner'
 
   const session = $derived($sessionStore.currentSession)
@@ -29,6 +30,12 @@
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === 'Enter') saveName()
     if (e.key === 'Escape') editingName = false
+  }
+
+  async function handleLogout() {
+    try { await apiLogout() } catch { /* ignore */ }
+    authStore.logout()
+    goto('/login')
   }
 </script>
 
@@ -65,5 +72,13 @@
     {/if}
   </div>
 
-  <a href="/settings" class="text-sm text-gray-500 hover:text-white transition-colors">Settings</a>
+  <div class="flex items-center gap-4">
+    <a href="/settings" class="text-sm text-gray-500 hover:text-white transition-colors">Settings</a>
+    <button
+      onclick={handleLogout}
+      class="text-sm text-gray-500 hover:text-red-400 transition-colors"
+    >
+      Logout
+    </button>
+  </div>
 </header>

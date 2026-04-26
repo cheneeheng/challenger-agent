@@ -14,6 +14,11 @@ relates_to:
 # LIBRARIES & FRAMEWORKS — IdeaLens
 **Stack:** React 19 + Vite · SvelteKit · TypeScript · Python 3.12 · FastAPI · PostgreSQL · SQLAlchemy 2.x async · Anthropic SDK
 
+> Two frontend implementations share one backend. Each frontend has its own dependency set.
+> Both are built and kept in sync; only one is deployed to production at a time.
+> React version details: 07_FRONTEND_IMPLEMENTATION.md
+> SvelteKit version details: 07_FRONTEND_IMPLEMENTATION_SVELTE.md
+
 ---
 
 ## FRONTEND A — React + Vite (`/apps/web-react`) — TypeScript
@@ -289,10 +294,10 @@ relates_to:
 
 | Service | Config | Purpose |
 |---|---|---|
-| ECS Fargate | api 512/1024 + web 256/512 (one service, one frontend at a time) | Serverless container hosting |
+| EC2 | t4g.small (API, runs Docker + Nginx) | Backend container host |
+| S3 + CloudFront | 1 bucket, 1 distribution | Frontend static asset hosting + global CDN |
 | ECR | 3 repos | `idealens-api`, `idealens-web-react`, `idealens-web-svelte` — both frontend images built and stored; only selected one deployed |
 | RDS PostgreSQL 16 | db.t3.micro, 20GB | Managed database (shared by both frontends) |
-| ALB | idle_timeout=60s | Load balancer + HTTPS + routing |
 | ACM | DNS validation | Auto-renewing TLS certificates |
 | Secrets Manager | 3 secrets | JWT_SECRET, API_KEY_ENCRYPTION_KEY, DATABASE_URL |
 | S3 | 1 bucket | Terraform remote state |
@@ -306,10 +311,10 @@ relates_to:
 | Decision | Choice | Reason |
 |---|---|---|
 | Two frontends, one repo | Monorepo | Backend is fully shared; single CI pipeline with parallel frontend jobs; no config drift between implementations |
-| Single frontend in production | `DEPLOY_FRONTEND` variable | Only one web ECS service runs at a time — keeps infra cost and complexity at single-frontend level |
+| Single frontend in production | `DEPLOY_FRONTEND` variable | Only one web service runs at a time — keeps infra cost and complexity at single-frontend level |
 | Frontend ports in dev | React :3000, SvelteKit :3001 | Both run simultaneously in local dev for side-by-side comparison; port collision avoided |
 | Both images in ECR | Yes | Both are built and stored regardless of which is active; switching is a deploy-only operation with no rebuild required |
-| Production port | 80 for both | React via nginx; SvelteKit via `PORT=80` on adapter-node — sg-web and ALB target group unchanged when switching |
+| Production port | 80 for both | React via nginx; SvelteKit via `PORT=80` on adapter-node — unchanged when switching |
 | CORS in dev | Both origins in `allow_origins` | Backend must accept requests from both local ports |
 | CORS in production | Single deployed origin only | Only one frontend is live; no need to expose both |
 | SvelteKit mode | SPA (`ssr = false`) | Matches React SPA behaviour; no SSR complexity; auth guard logic stays client-side |

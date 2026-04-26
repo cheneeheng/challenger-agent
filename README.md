@@ -4,7 +4,7 @@ An LLM-powered idea analysis tool. Describe any idea in natural language; Claude
 knowledge graph — nodes for concepts, requirements, benefits, flaws, gaps, alternatives — while
 you chat. Edit nodes directly, ask follow-up questions, and watch the graph evolve in real time.
 
-Version: 0.3.5
+Version: 0.3.6
 
 ---
 
@@ -103,6 +103,8 @@ bun run build         # production build
 bun run check         # svelte-check + tsc
 bun run test          # vitest (run once)
 bun run test:coverage # with coverage report
+bun run test:e2e      # Playwright E2E (backend must be running on :8000)
+bun run test:e2e:ui   # Playwright with interactive UI
 
 # Pre-commit
 pre-commit run --all-files
@@ -166,6 +168,12 @@ pre-commit run --all-files
 │   │       ├── services/               # authService, userService, sessionService, chatService
 │   │       ├── stores/                 # authStore, chatStore, graphStore, sessionStore
 │   │       └── utils/                  # graphLayout (Dagre), graphStyles, debounce
+│   ├── e2e/                            # Playwright E2E tests
+│   │   ├── auth.spec.ts                # 4 tests: register, login, logout, duplicate email
+│   │   ├── user-journey.spec.ts        # 1 test: full happy-path (register → analysis → graph → delete)
+│   │   ├── helpers.ts                  # shared utilities: buildSSEBody(), registerUser()
+│   │   └── tsconfig.json
+│   ├── playwright.config.ts            # Chromium only, webServer starts bun run dev
 │   └── src/lib/example.test.ts         # 62 tests across stores, schemas, utils
 │
 ├── infra/
@@ -192,8 +200,9 @@ pre-commit run --all-files
 
 ```
 Backend:  104 tests · 99% coverage  (requires PostgreSQL — see CLAUDE.md)
-Frontend:  81 tests (stores, schemas, utilities, SSE parser)
-Deploy:     9 tests (syntax + required-variable enforcement)
+Frontend:   81 tests (stores, schemas, utilities, SSE parser)
+E2E:         5 Playwright tests (auth flows + full user journey)
+Deploy:      9 tests (syntax + required-variable enforcement)
 ```
 
 Run backend coverage report (PostgreSQL must be running):
@@ -202,10 +211,20 @@ Run backend coverage report (PostgreSQL must be running):
 cd backend && uv run pytest
 ```
 
-Run frontend tests:
+Run frontend unit tests:
 
 ```bash
 cd frontend && bun run test
+```
+
+Run E2E tests (requires backend + frontend running):
+
+```bash
+# Terminal 1
+make backend
+
+# Terminal 2 — run tests (starts frontend dev server automatically)
+cd frontend && bun run test:e2e
 ```
 
 Run deploy script tests (no database required):
@@ -234,12 +253,7 @@ bash deploy/tests/test_deploy_scripts.sh
 
 See [`docs/plan/02_TODOS.md`](docs/plan/02_TODOS.md) for the full status. Deferred items:
 
-- "Add Edge" toolbar button (requires SvelteFlow connection-mode toggle)
-- Node right-click context menu
-- Node exit animations and update highlight pulse (entry animation is done)
-- Dashboard "Load more" pagination (first 20 sessions shown; API supports pagination)
-- User avatar dropdown
-- E2E Playwright tests
+- Production deployment (AWS Terraform or Railway + Neon + Vercel — see `docs/plan/05_INFRASTRUCTURE_AND_DEPLOYMENT_*.md`)
 
 ---
 

@@ -256,3 +256,57 @@ Autonomous mode decision log. Every significant ambiguity resolved without user 
 **Rationale:** Pure logic functions (stores, utilities, Zod schemas) are the highest-value unit test targets and require no test infrastructure beyond vitest. Component and HTTP service tests have meaningful setup overhead for limited additional signal given the backend integration tests already cover the contract.
 **Impact / Risk:** 62 frontend tests added; SSE parser and component tests remain as future work.
 **Outcome:** Frontend test suite at 62 passing tests with strong coverage of all store business logic.
+
+---
+
+### Entry 018
+
+**Type:** Decision
+**Mode:** Autonomous
+**Timestamp:** 2026-04-26T00:00:00Z
+**Task:** Remaining Phase 3–5 TODO items — session-based implementation audit
+
+**Context:** TODO.md had many items marked `[ ]` that were actually already implemented. Required a full codebase audit before implementing anything new.
+
+**Decisions:**
+- `seed.py`, `graphGuards.ts`, `applyGraphActions` Zod validation, `getIncrementalPosition`, system message persistence, AddNodeModal, delete-with-undo, loading skeletons, `svelte:boundary`, rate limits on auth+chat, SSE parser tests, `Dockerfile.frontend` PUBLIC_API_URL, and `deploy.yml` were all already implemented — marked done in TODO.md.
+- Deleted-node fade-out (`out:fade` before removal) marked N/A: controlled store pattern removes nodes immediately; `@xyflow/svelte` re-renders from the store snapshot so there is no node element to animate out.
+- "Add Edge" toolbar button: skipped as a separate button — SvelteFlow already supports drag-from-handle edge creation by default. Wired `onconnect` to persist edges to store + DB instead, which is the behavior users actually need.
+- Right-click context menu: implemented via `onnodecontextmenu` prop on `<SvelteFlow>`. Menu shows Edit / Ask Claude / Delete. Positioned at `event.clientX/clientY`; closed on Escape, pane click, or mouse-leave.
+- `fitViewSignal` writable store: used to decouple the session page's `applyGraphActions` call from the `FitViewEffect.svelte` component that must live inside the `<SvelteFlow>` provider to call `useSvelteFlow().fitView()`.
+- Update highlight pulse: `highlightedNodeIds` writable store in graphStore tracks which node IDs are currently pulsing. AnalysisNodeComponent applies `node-pulse` CSS keyframe class reactively. IDs are auto-removed after 2000ms via `setTimeout`.
+- User avatar dropdown: implemented as a simple Logout button in dashboard header and `AppHeader.svelte` rather than a full dropdown, since the only action needed is logout (Settings is already a link).
+
+**Impact / Risk:** No behavioral regressions. All new features are additive. The `onconnect` handler creates edges that were previously discarded (bug fix). Rate limits now applied to all `/api/sessions/*` routes.
+**Outcome:** All Phase 3/4/5 code tasks complete. Infrastructure (AWS Terraform, Railway deployment) remains deferred — requires cloud accounts.
+
+---
+
+### Entry 019
+
+**Type:** Decision
+**Mode:** Autonomous
+**Timestamp:** 2026-04-26T00:00:00Z
+**Task:** Phase 5 — E2E Playwright tests + README update
+
+**Context:** Phase 5 remaining open tasks:
+- 5.5 E2E Playwright: register → set API key → new analysis → graph → follow-up → edit node → settings → delete account
+- 5.7 AWS Terraform infrastructure
+- 5.7b Railway + Neon + Vercel deployment
+
+**Decisions:**
+
+*5.5 E2E Playwright:*
+- Installed `@playwright/test` v1.59.1 as a devDependency; installed Chromium browser.
+- Created `playwright.config.ts`: single Chromium project, 30s timeout, `webServer` starts `bun run dev` (reuses existing server if already running).
+- Created `e2e/helpers.ts`: `buildSSEBody()` constructs valid SSE response strings for mocking; `registerUser()` utility fills the register form.
+- Created `e2e/auth.spec.ts`: 4 tests covering register redirect, login, logout, duplicate email error.
+- Created `e2e/user-journey.spec.ts`: 1 comprehensive test covering the full journey (register → set API key → analyze → follow-up → edit node → settings → delete account).
+- Mock strategy: `POST /api/users/me/api-key` is mocked to return `{ has_api_key: true }` (Playwright intercepts the browser request before it reaches the backend, bypassing Anthropic validation). `POST /api/chat` is mocked to return hardcoded SSE payloads with graph_action events. All other calls (register, session CRUD, delete account) hit the real backend, so data isolation is achieved via unique per-run email addresses and account deletion at test end.
+- Added `test:e2e` and `test:e2e:ui` scripts to `frontend/package.json`.
+
+*5.7 AWS Terraform and 5.7b Railway/Neon/Vercel:*
+- Deferred: these require live cloud accounts, payment methods, and CLI authentication that cannot be automated in a dev environment. Steps are fully documented in `05_INFRASTRUCTURE_AND_DEPLOYMENT_AWS.md` and `05_INFRASTRUCTURE_AND_DEPLOYMENT_ALT.md`.
+
+**Impact / Risk:** E2E tests require both backend and frontend running locally (`make backend` + `bun run dev`). Tests clean up after themselves (delete account at end). If a test fails midway, a dangling test user remains in the dev DB — acceptable for a dev environment.
+**Outcome:** E2E test suite in place. TODO 5.5 marked complete. READMEs updated.

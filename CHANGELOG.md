@@ -6,6 +6,33 @@ Format: `[version] YYYY-MM-DD — description`
 
 ---
 
+## [0.3.6] 2026-04-26 — E2E test suite, graph context menu, node animations, dashboard polish
+
+### Added
+- **`frontend/playwright.config.ts`** — Playwright configuration targeting Chromium with `baseURL http://localhost:5173` and a `webServer` block that starts `bun run dev` automatically before the test run.
+- **`frontend/e2e/helpers.ts`** — Shared E2E utilities: `buildSSEBody()` for constructing streaming request payloads and `registerUser()` for creating a test account in setup/teardown.
+- **`frontend/e2e/auth.spec.ts`** — 4 Playwright tests covering the full auth surface: register-and-redirect, login, logout, and duplicate-email error handling.
+- **`frontend/e2e/user-journey.spec.ts`** — 1 comprehensive happy-path test: register → set API key → create analysis → interact with graph → send follow-up → edit node → navigate to settings → delete account.
+- **`frontend/e2e/tsconfig.json`** — TypeScript config scoped to the `e2e/` directory so Playwright's globals type-check correctly without polluting the main frontend tsconfig.
+- **`frontend/src/lib/components/graph/FitViewEffect.svelte`** — New component that calls `fitView()` from inside the SvelteFlow provider context, working around the constraint that `useNodes`/`useSvelteFlow` hooks must be invoked inside the flow tree.
+- **`frontend/src/lib/components/graph/GraphPanel.svelte`** — Right-click context menu via `onnodecontextmenu`; edge persistence via `onconnect` handler that writes new edges to `graphStore`.
+- **`frontend/src/lib/components/graph/nodes/AnalysisNodeComponent.svelte`** — `node-pulse` CSS keyframe animation triggered via `highlightedNodeIds` store when the LLM adds or updates a node.
+- **`frontend/src/lib/components/layout/AppHeader.svelte`** — Inline session rename on double-click, model badge display, and logout action.
+- **`frontend/src/lib/stores/graphStore.ts`** — `highlightedNodeIds` set, `fitViewSignal` derived store, `deleteEdge` action, and Zod validation on `applyGraphActions` LLM payloads.
+- **`frontend/src/routes/(protected)/(requires-api-key)/+page.svelte`** — Delete-with-undo toast, loading skeleton, and full session CRUD wiring.
+- **`backend/app/api/routes/sessions.py`** — Rate limits (`60/minute`) applied to all session routes including the `add_message` endpoint introduced in 0.3.5.
+
+### Changed
+- **`frontend/package.json`** — Added `@playwright/test` devDependency; added `test:e2e` and `test:e2e:ui` scripts.
+- **`CLAUDE.md`** — Corrected stale `sudo service postgresql start` → `make db` (Docker-based); added `make db`, `make db-stop`, `make db-migrate` command entries; added `test:e2e` and `test:e2e:ui` to frontend commands; updated frontend architecture tree with `FitViewEffect.svelte` and the `e2e/` directory.
+- **`README.md`** — Updated E2E test count to 5 tests, added run instructions, listed `e2e/` in project structure, added `test:e2e` to commands table.
+
+### Docs
+- **`docs/plan/02_TODOS.md`** — Task 5.5 (E2E Playwright) marked complete `[x]`.
+- **`docs/claude_logs/DECISION_LOG.md`** — Added Entry 019 documenting E2E test design decisions (Chromium-only, `webServer` integration, helper extraction).
+
+---
+
 ## [0.3.5] 2026-04-19 — System message persistence, node entry animation, CI hardening
 
 ### Added

@@ -4,13 +4,19 @@
   import { toast } from 'svelte-sonner'
   import { authStore } from '$lib/stores/authStore'
   import { listSessions, createSession, deleteSession } from '$lib/services/sessionService'
+  import { logout as apiLogout } from '$lib/services/authService'
   import { formatDistanceToNow } from 'date-fns'
 
   const user = $derived($authStore.user)
 
   let sessions = $state<Awaited<ReturnType<typeof listSessions>>['items']>([])
   let isLoading = $state(true)
+  let isLoadingMore = $state(false)
+  let currentPage = $state(1)
+  let totalSessions = $state(0)
   let showNewModal = $state(false)
+
+  const hasMore = $derived(sessions.length < totalSessions)
 
   let newIdea = $state('')
   let newModel = $state('claude-sonnet-4-6')
@@ -24,14 +30,32 @@
 
   onMount(async () => {
     try {
-      const data = await listSessions()
+      const data = await listSessions(1, 20)
       sessions = data.items
+      totalSessions = data.total
+      currentPage = 1
     } catch {
       toast.error('Failed to load sessions')
     } finally {
       isLoading = false
     }
   })
+
+  async function loadMore() {
+    if (isLoadingMore || !hasMore) return
+    isLoadingMore = true
+    try {
+      const nextPage = currentPage + 1
+      const data = await listSessions(nextPage, 20)
+      sessions = [...sessions, ...data.items]
+      totalSessions = data.total
+      currentPage = nextPage
+    } catch {
+      toast.error('Failed to load more sessions')
+    } finally {
+      isLoadingMore = false
+    }
+  }
 
   async function handleCreate() {
     if (!newIdea.trim() || creating) return
@@ -99,6 +123,12 @@
     }
   }
 
+  async function handleLogout() {
+    try { await apiLogout() } catch { /* ignore */ }
+    authStore.logout()
+    goto('/login')
+  }
+
   function handleGlobalKeydown(e: KeyboardEvent) {
     if (e.key === 'Escape' && showNewModal) {
       showNewModal = false
@@ -120,6 +150,12 @@
     <div class="flex items-center gap-4">
       <a href="/settings" class="text-sm text-gray-400 hover:text-white transition-colors">Settings</a>
       <span class="text-gray-600 text-sm">{user?.name ?? ''}</span>
+      <button
+        onclick={handleLogout}
+        class="text-sm text-gray-500 hover:text-red-400 transition-colors"
+      >
+        Logout
+      </button>
     </div>
   </header>
 
@@ -200,6 +236,18 @@
           </div>
         {/each}
       </div>
+
+      {#if hasMore}
+        <div class="mt-6 text-center">
+          <button
+            onclick={loadMore}
+            disabled={isLoadingMore}
+            class="text-sm text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 px-6 py-2 rounded-lg transition-colors disabled:opacity-50"
+          >
+            {isLoadingMore ? 'Loading…' : `Load more (${totalSessions - sessions.length} remaining)`}
+          </button>
+        </div>
+      {/if}
     {/if}
   </main>
 </div>

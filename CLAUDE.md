@@ -11,25 +11,24 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Environment Setup
 
-PostgreSQL must be running before starting the backend or running tests:
+PostgreSQL runs in Docker via `make db`. `make dev` starts it automatically.
+On first run or after a schema change:
 
 ```bash
-sudo service postgresql start   # required in devcontainer — not auto-started
-```
-
-On first clone or after schema changes:
-
-```bash
-cd backend && uv run alembic upgrade head
+make db                                    # Start postgres container (detached)
+cd backend && uv run alembic upgrade head  # Apply migrations
 ```
 
 ## Commands
 
 ```bash
 # Development (from repo root)
-make dev        # Run backend + frontend in parallel
+make dev        # Run backend + frontend in parallel (starts postgres first)
 make backend    # Backend only (port 8000, hot reload)
 make frontend   # Frontend only (port 5173, hot reload)
+make db         # Start postgres container (Docker)
+make db-stop    # Stop postgres container
+make db-migrate # Run alembic upgrade head
 make test       # Run pytest (quiet)
 
 # Backend (from backend/)
@@ -48,8 +47,10 @@ bun run dev       # Dev server
 bun run build     # Production build
 bun run check     # Type-check (svelte-check + tsc)
 bun run preview   # Preview production build
-bun run test      # Run vitest (unit tests)
+bun run test           # Run vitest (unit tests)
 bun run test:coverage  # With coverage report
+bun run test:e2e       # Playwright E2E tests (requires make backend running)
+bun run test:e2e:ui    # Playwright with interactive UI
 
 # Pre-commit
 pre-commit run --all-files
@@ -90,11 +91,13 @@ routes/               # File-based routing (+page.svelte, +layout.svelte, +page.
   +error.svelte       # Global error boundary (404/500)
   (protected)/        # Auth-guarded routes; (requires-api-key)/ nested inside
 lib/
-  components/         # chat/, graph/ (incl. AddNodeModal.svelte), layout/ subdirectories
+  components/         # chat/, layout/ subdirectories; graph/ has GraphPanel, GraphToolbar,
+                      #   NodeDetailPanel, FitViewEffect, AddNodeModal, nodes/
   stores/             # authStore, chatStore, graphStore, sessionStore
   services/           # authService, chatService (+ chatService.test.ts), sessionService, userService
   schemas/            # graph.ts — Zod schemas for LLM graph actions
   utils/              # graphLayout.ts (Dagre), graphStyles.ts, debounce.ts, graphGuards.ts
+e2e/                  # Playwright E2E tests (auth.spec.ts, user-journey.spec.ts, helpers.ts)
 ```
 
 Svelte 5 runes syntax (`$props()`, `$state()`, `$derived()`, `{@render ...}`). TailwindCSS v4 — configured via Vite plugin, no `tailwind.config.js`.

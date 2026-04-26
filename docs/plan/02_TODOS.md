@@ -343,12 +343,12 @@ relates_to:
 > Primary deployment: EC2 t4g.small (API) + S3/CloudFront (frontend) + RDS, managed via Terraform.
 > See `05_INFRASTRUCTURE_AND_DEPLOYMENT_AWS.md` for full reference.
 
-- [ ] Bootstrap S3 + DynamoDB for Terraform state
-- [ ] Implement all Terraform modules (networking, ecr, rds, secrets, iam, ec2, acm, s3, cloudfront)
-- [ ] `terraform.tfvars`: EC2 t4g.small, RDS db.t3.micro
-- [ ] The EC2 instance runs the API container via Docker; the active frontend image is built into S3/CloudFront at deploy time — Terraform is frontend-agnostic
-- [ ] `terraform plan && terraform apply`
-- [ ] Run `alembic upgrade head` via SSH on first deploy
+- [x] Bootstrap S3 + DynamoDB for Terraform state (`deploy/aws/terraform/bootstrap/main.tf`)
+- [x] Implement all Terraform modules (networking, ecr, rds, secrets, iam, ec2, acm, s3, cloudfront) — `deploy/aws/terraform/modules/`
+- [x] `terraform.tfvars`: EC2 t4g.small, RDS db.t3.micro (`terraform.tfvars.example`)
+- [x] The EC2 instance runs the API container via Docker; the active frontend image is built into S3/CloudFront at deploy time — Terraform is frontend-agnostic
+- [ ] `terraform plan && terraform apply` (manual — requires AWS credentials)
+- [ ] Run `alembic upgrade head` via SSH on first deploy (manual — post-apply step)
 
 ### 5.7b Non-AWS Alternative — Railway + Neon + Vercel
 > Near-free alternative (~$5/month vs ~$26/month for AWS). Choose this instead of §5.7 if cost is a constraint.

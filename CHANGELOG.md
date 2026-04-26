@@ -1,8 +1,33 @@
 # Changelog
 
-All notable changes to this template are documented here.
-
 Format: `[version] YYYY-MM-DD — description`
+
+---
+
+## [0.4.0] 2026-04-26 — Terraform AWS infrastructure, deploy restructure, infra → deploy migration
+
+### Added
+- **`deploy/aws/terraform/`** — Full Terraform module set for AWS. Provisions EC2 t4g.small (ARM/Graviton2) with Nginx + Let's Encrypt for the API, S3 + CloudFront for the SvelteKit SPA, RDS db.t3.micro PostgreSQL 16 in a private subnet, ECR repository (ARM64 images, lifecycle retaining last 10), and Secrets Manager entries. Estimated cost ~$26/month.
+- **`deploy/aws/terraform/bootstrap/`** — One-time bootstrap that creates the S3 bucket and DynamoDB table for remote Terraform state. Run once per AWS account.
+- **`deploy/aws/terraform/modules/`** — Seven Terraform child modules: `cloudfront`, `ec2`, `ecr`, `networking`, `rds`, `s3`, `secrets`.
+- **`deploy/aws/terraform/terraform.tfvars.example`** — Reference variable file documenting all required Terraform inputs (domain, secrets, key pair name, etc.).
+- **`deploy/Dockerfile.backend`** — Backend Dockerfile moved from `infra/` to `deploy/`. Builds ARM64 API image for EC2 deployment.
+- **`deploy/Dockerfile.frontend`** — Frontend Dockerfile moved from `infra/` to `deploy/`.
+- **`deploy/docker-compose.dev.yml`** — Dev compose file moved from `infra/` to `deploy/`.
+- **`deploy/docker-compose.yaml`** — Production compose file moved from `infra/` to `deploy/`.
+
+### Changed
+- **`deploy/aws/deploy.sh`** — Major overhaul. Replaced App Runner target with EC2+S3+CloudFront architecture. Now builds ARM64 Docker image via `docker buildx`, pushes to ECR, deploys to EC2 via SSM, builds the SvelteKit SPA locally, syncs to S3, and invalidates the CloudFront distribution. Required env vars updated: `APPRUNNER_ECR_ROLE_ARN`/`DATABASE_URL`/`JWT_SECRET`/`API_KEY_ENCRYPTION_KEY` replaced with `ECR_REGISTRY`, `EC2_INSTANCE_ID`, `S3_BUCKET`, `CF_DISTRIBUTION_ID`, and `API_URL` (all sourced from Terraform outputs).
+- **`deploy/aws/README.md`** — Rewritten to document the Terraform-based EC2+S3+CloudFront architecture. Covers bootstrap, variable configuration, `terraform apply`, and the `deploy.sh` flow.
+- **`deploy/azure/deploy.sh`** — Updated `PUBLIC_API_URL` build arg reference.
+- **`deploy/gcp/deploy.sh`** — Updated `PUBLIC_API_URL` build arg reference.
+- **`deploy/tests/test_deploy_scripts.sh`** — Updated path references to reflect Dockerfile relocation from `infra/` to `deploy/`.
+- **`deploy/README.md`** — Updated to reflect new `deploy/` layout and Terraform-based AWS deployment path.
+- **`Makefile`** — `make db` and `make db-stop` updated to reference `deploy/docker-compose.dev.yml` instead of `infra/docker-compose.dev.yml`.
+- **`README.md`** — Project structure and deployment section updated to reflect `deploy/` consolidation.
+
+### Removed
+- **`infra/`** — Entire directory deleted. All files relocated to `deploy/`: `Dockerfile.backend`, `Dockerfile.frontend`, `docker-compose.dev.yml`, `docker-compose.yaml`, `README.md`.
 
 ---
 

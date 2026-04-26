@@ -2,7 +2,7 @@ services:
   backend:
     build:
       context: ../backend
-      dockerfile: ../infra/Dockerfile.backend
+      dockerfile: ./Dockerfile.backend
     ports:
       - "8000:8000"
     env_file:
@@ -17,7 +17,7 @@ services:
   frontend:
     build:
       context: ../frontend
-      dockerfile: ../infra/Dockerfile.frontend
+      dockerfile: ./Dockerfile.frontend
     ports:
       - "3000:3000"
     env_file:

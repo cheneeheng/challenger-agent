@@ -1,107 +1,125 @@
-# AWS Deployment
+# AWS Deployment — EC2 + S3/CloudFront
 
-Backend and frontend run as separate App Runner services. Images are stored in ECR.
+**Architecture:**
 
----
-
-## AWS resources
-
-| Resource | Created by | Purpose |
+| Component | AWS resource | Details |
 |---|---|---|
-| ECR repositories (×2) | `deploy.sh` | Store backend and frontend images |
-| App Runner services (×2) | `deploy.sh` | Run backend (port 8000) and frontend (port 3000) |
-| IAM role | You (once) | Lets App Runner pull images from ECR |
-| RDS PostgreSQL 16 | `setup-infra.sh` | Managed database (private, in default VPC) |
-| Security group | `setup-infra.sh` | Allows port 5432 from within the VPC |
-| App Runner VPC connector | `setup-infra.sh` | Gives App Runner egress to the private RDS instance |
-| Secrets Manager secrets | `setup-infra.sh` | Stores `DATABASE_URL`, `JWT_SECRET`, `API_KEY_ENCRYPTION_KEY` |
+| API | EC2 t4g.small (ARM/Graviton2) | Docker + Nginx + Let's Encrypt; Elastic IP |
+| Frontend | S3 + CloudFront | SvelteKit SPA (ssr=false); ACM cert; OAC origin |
+| Database | RDS db.t3.micro | PostgreSQL 16; private subnet; encrypted |
+| Images | ECR | ARM64 API image; lifecycle: last 10 kept |
+| Secrets | Secrets Manager | DATABASE_URL, JWT_SECRET, API_KEY_ENCRYPTION_KEY |
 
----
-
-## IAM role (one-time, manual)
-
-Create the role that allows App Runner to pull from ECR. You only do this once
-per AWS account.
-
-```bash
-# 1. Create the role with the App Runner trust policy
-aws iam create-role \
-  --role-name AppRunnerECRRole \
-  --assume-role-policy-document '{
-    "Version": "2012-10-17",
-    "Statement": [{
-      "Effect": "Allow",
-      "Principal": { "Service": "build.apprunner.amazonaws.com" },
-      "Action": "sts:AssumeRole"
-    }]
-  }'
-
-# 2. Attach the managed policy
-aws iam attach-role-policy \
-  --role-name AppRunnerECRRole \
-  --policy-arn arn:aws:iam::aws:policy/service-role/AWSAppRunnerServicePolicyForECRAccess
-
-# 3. Note the ARN — you'll need it as APPRUNNER_ECR_ROLE_ARN
-aws iam get-role --role-name AppRunnerECRRole --query "Role.Arn" --output text
-```
+**Cost estimate:** ~$26/month (EC2 $12, RDS $12, S3 $0.01, CloudFront $0.09, ECR $0.05, Secrets Manager $1.20)
 
 ---
 
 ## First deploy
 
-### Step 1 — Fill in `.env`
-
-Both scripts read from the root `.env` automatically. Fill in the AWS Deploy
-section (and the Backend section if you haven't already):
+### Step 0 — Prerequisites
 
 ```bash
-# Generate secrets
-DB_PASSWORD=$(openssl rand -hex 16)
-JWT_SECRET=$(openssl rand -hex 32)
-API_KEY_ENCRYPTION_KEY=$(python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
+brew install terraform awscli
+# Configure AWS credentials
+aws configure
+
+# Create an EC2 key pair (needed by Terraform for var.ec2_key_pair_name)
+aws ec2 create-key-pair \
+  --key-name idealens-prod \
+  --query KeyMaterial --output text > ~/.ssh/idealens-prod.pem
+chmod 600 ~/.ssh/idealens-prod.pem
 ```
 
-Then set these in `.env`:
+### Step 1 — Bootstrap Terraform state backend
 
-```
-APP_NAME=myapp
-AWS_REGION=us-east-1
-APPRUNNER_ECR_ROLE_ARN=arn:aws:iam::123456789012:role/AppRunnerECRRole
-DB_PASSWORD=<generated above>
-JWT_SECRET=<generated above>
-API_KEY_ENCRYPTION_KEY=<generated above>
-```
-
-### Step 2 — Provision infrastructure
+Run once per AWS account. Creates the S3 bucket and DynamoDB table for remote state.
 
 ```bash
-bash deploy/aws/setup-infra.sh
+cd deploy/aws/terraform/bootstrap
+terraform init
+terraform apply
+
+# Note the state_bucket output value, e.g. idealens-tf-state-123456789012
 ```
 
-The script creates RDS, the VPC connector, and Secrets Manager entries, then
-prints the `VPC_CONNECTOR_ARN` and `DATABASE_URL` to add to `.env`.
-
-`setup-infra.sh` is idempotent — safe to re-run. Resources that already exist
-are skipped.
-
-### Step 3 — Run database migrations
-
-App Runner services have no direct shell access. Connect to RDS from a machine
-that has network access (EC2 in the same VPC, AWS Cloud Shell, or a temporary
-SSH tunnel via an EC2 bastion):
+Edit `deploy/aws/terraform/backend.tf` and replace `REPLACE_WITH_ACCOUNT_ID` with
+your account ID. Then:
 
 ```bash
-# From a machine that can reach the RDS endpoint:
-DATABASE_URL='postgresql+asyncpg://...' \
-  cd backend && uv run alembic upgrade head
+cd deploy/aws/terraform
+terraform init   # configures the S3 backend
 ```
 
-Alternatively, temporarily set `--publicly-accessible` on the RDS instance,
-run migrations from your laptop, then disable public access.
-
-### Step 4 — Deploy
+### Step 2 — Configure variables
 
 ```bash
+cp deploy/aws/terraform/terraform.tfvars.example deploy/aws/terraform/terraform.tfvars
+# Fill in terraform.tfvars — domain, secrets, key pair name, etc.
+# terraform.tfvars is gitignored.
+```
+
+Generate secrets:
+
+```bash
+openssl rand -hex 32                                          # jwt_secret
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"  # api_key_encryption_key
+openssl rand -hex 16                                          # rds_password
+```
+
+### Step 3 — Apply Terraform
+
+```bash
+cd deploy/aws/terraform
+terraform plan
+terraform apply
+```
+
+Terraform creates EC2, RDS, ECR, S3, CloudFront, Secrets Manager entries, and a
+GitHub Actions IAM user. Note the outputs — you'll need them in the next steps.
+
+### Step 4 — DNS
+
+Point your domains:
+- `api.yourdomain.com` → EC2 Elastic IP (`terraform output ec2_elastic_ip`)
+- `yourdomain.com` → CloudFront domain, or set up a CNAME/ALIAS in Route 53
+
+Add the ACM DNS validation records (`terraform output acm_validation_records`)
+to your DNS provider. CloudFront will not serve HTTPS until the cert validates.
+
+### Step 5 — TLS on EC2 (Let's Encrypt)
+
+After DNS propagates:
+
+```bash
+ssh -i ~/.ssh/idealens-prod.pem ec2-user@<elastic-ip>
+sudo certbot --nginx -d api.yourdomain.com
+```
+
+Certbot rewrites the Nginx config to add HTTPS and sets up auto-renewal.
+
+### Step 6 — Run database migrations
+
+From inside the EC2 instance (or via SSM Session Manager):
+
+```bash
+# Via SSM (no SSH key needed)
+aws ssm start-session --target <instance-id>
+
+# On the EC2 instance:
+docker exec -it $(docker ps -q) uv run alembic upgrade head
+```
+
+### Step 7 — Deploy
+
+```bash
+# Set required env vars (or add to root .env)
+export APP_NAME=idealens
+export ECR_REGISTRY=$(cd deploy/aws/terraform && terraform output -raw ecr_registry)
+export EC2_INSTANCE_ID=$(cd deploy/aws/terraform && terraform output -raw ec2_instance_id)
+export S3_BUCKET=$(cd deploy/aws/terraform && terraform output -raw s3_bucket)
+export CF_DISTRIBUTION_ID=$(cd deploy/aws/terraform && terraform output -raw cloudfront_distribution_id)
+export API_URL=https://api.idealens.dev
+
 bash deploy/aws/deploy.sh
 ```
 
@@ -109,7 +127,7 @@ bash deploy/aws/deploy.sh
 
 ## Subsequent deploys
 
-Only `deploy.sh` is needed. Keep `.env` up to date and run:
+Only `deploy.sh` is needed — Terraform is only re-run when infrastructure changes.
 
 ```bash
 bash deploy/aws/deploy.sh
@@ -117,46 +135,63 @@ bash deploy/aws/deploy.sh
 
 ---
 
-## Secrets Manager
+## GitHub Actions secrets
 
-`setup-infra.sh` stores `DATABASE_URL`, `JWT_SECRET`, and `API_KEY_ENCRYPTION_KEY`
-in Secrets Manager under `{APP_NAME}/DATABASE_URL` etc.
-
-`deploy.sh` currently passes these as App Runner `RuntimeEnvironmentVariables`
-(plaintext in the service config). For production, use App Runner's
-`RuntimeEnvironmentSecrets` instead — it pulls values directly from Secrets
-Manager and keeps them out of the service configuration API response:
+After `terraform apply`, set these secrets in your GitHub repository:
 
 ```bash
-# Retrieve an ARN for use in RuntimeEnvironmentSecrets
-aws secretsmanager describe-secret \
-  --secret-id "$APP_NAME/DATABASE_URL" \
-  --query "ARN" --output text
+terraform output -raw github_actions_access_key_id    # → AWS_ACCESS_KEY_ID
+terraform output -raw github_actions_secret_access_key # → AWS_SECRET_ACCESS_KEY
+terraform output -raw ec2_instance_id                 # → EC2_INSTANCE_ID
+terraform output -raw ecr_registry                    # → ECR_REGISTRY
+terraform output -raw s3_bucket                       # → S3_BUCKET
+terraform output -raw cloudfront_distribution_id      # → CF_DISTRIBUTION_ID
 ```
 
-Then replace the `RuntimeEnvironmentVariables` block in `deploy.sh` with:
+Also set: `AWS_REGION`, `API_URL`.
 
-```json
-"RuntimeEnvironmentSecrets": {
-  "DATABASE_URL":           "arn:aws:secretsmanager:...",
-  "JWT_SECRET":             "arn:aws:secretsmanager:...",
-  "API_KEY_ENCRYPTION_KEY": "arn:aws:secretsmanager:..."
-}
-```
+---
 
-The App Runner execution role will also need `secretsmanager:GetSecretValue`
-added to its permissions.
+## Terraform modules
+
+| Module | Resources |
+|---|---|
+| `networking` | Default VPC data source, EC2 security group, RDS security group |
+| `ecr` | ECR repository + lifecycle policy (keep last 10) |
+| `rds` | RDS db.t3.micro PostgreSQL 16, DB subnet group |
+| `secrets` | Secrets Manager entries for DATABASE_URL, JWT_SECRET, API_KEY_ENCRYPTION_KEY, FRONTEND_URLS_RAW |
+| `ec2` | EC2 t4g.small (ARM64), Elastic IP, instance role (ECR + Secrets Manager + SSM), user data |
+| `s3` | Private S3 bucket with versioning; bucket policy in root module |
+| `cloudfront` | ACM cert (us-east-1), OAC, distribution with SPA 404 routing, cache policies |
+
+Root `main.tf` also creates a GitHub Actions IAM user with least-privilege access
+(ECR push, S3 sync, CloudFront invalidation, SSM send-command).
 
 ---
 
 ## Notes
 
-**`PUBLIC_API_URL` is compiled at build time**, not runtime. `deploy.sh`
-builds the frontend image after the backend is deployed so it can pass the
-correct backend URL as `--build-arg PUBLIC_API_URL`. If you add a custom
-domain to the backend, set `PUBLIC_API_URL` to that domain so the URL stays
-stable across redeploys.
+**`PUBLIC_API_URL` is compiled at build time** by Vite. `deploy.sh` passes it as
+an environment variable during `bun run build`. If you change the API domain,
+re-run `deploy.sh` with the updated `API_URL`.
 
-**CORS**: `FRONTEND_URLS_RAW` on the backend defaults to the frontend App
-Runner URL. If you add a custom domain, re-deploy the backend with
-`FRONTEND_URLS_RAW` set to the custom domain.
+**SSE streaming**: the Nginx config written by EC2 user data sets
+`proxy_buffering off` and `proxy_read_timeout 120s` on `/api/chat` so SSE tokens
+reach the client without buffering delays.
+
+**ARM64 images**: `deploy.sh` builds with `--platform linux/arm64` using Docker
+Buildx. The EC2 instance type is `t4g.small` (Graviton2, ARM64). If you change
+to an x86 instance type, also change the build platform and the `ec2_instance_type`
+variable.
+
+**Secrets rotation**: After rotating a secret, update it in Secrets Manager and
+re-run the bootstrap script on EC2 to refresh `/opt/idealens/.env`:
+
+```bash
+aws ssm start-session --target <instance-id>
+# Re-run the secrets pull section from user_data.sh.tpl
+```
+
+**App Runner alternative**: The original `setup-infra.sh` provisions an App
+Runner-based stack (~$12/month cheaper but no persistent container for SSE).
+See git history for the App Runner `deploy.sh` if needed.

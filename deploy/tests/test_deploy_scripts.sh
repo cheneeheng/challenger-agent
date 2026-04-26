@@ -137,7 +137,7 @@ assert_contains "missing APP_NAME → error in setup-infra" "APP_NAME" "$output3
 echo ""
 echo "=== Dockerfile.frontend PUBLIC_API_URL ==="
 
-dockerfile="$REPO_ROOT/infra/Dockerfile.frontend"
+dockerfile="$REPO_ROOT/deploy/Dockerfile.frontend"
 if [ -f "$dockerfile" ]; then
   content=$(cat "$dockerfile")
   assert_contains "Dockerfile.frontend has ARG PUBLIC_API_URL" "ARG PUBLIC_API_URL" "$content"

@@ -1,0 +1,37 @@
+# Copy this file to terraform.tfvars and fill in the values.
+# terraform.tfvars is gitignored — never commit secrets.
+
+# ---- AWS -------------------------------------------------------------------
+aws_region  = "us-east-1"
+app_name    = "idealens"
+environment = "production"
+
+# ---- Domains ---------------------------------------------------------------
+domain_name   = "idealens.dev"
+api_subdomain = "api.idealens.dev"
+
+# ---- Networking ------------------------------------------------------------
+# Restrict to your IP: curl -s ifconfig.me
+ssh_allowed_cidr = "0.0.0.0/0"
+
+# ---- EC2 -------------------------------------------------------------------
+ec2_instance_type = "t4g.small"
+# Create a key pair in the AWS console (EC2 > Key Pairs) before applying.
+ec2_key_pair_name = "idealens-prod"
+
+# ---- RDS -------------------------------------------------------------------
+rds_instance_class = "db.t3.micro"
+rds_db_name        = "idealens"
+rds_username       = "idealens"
+# Generate: openssl rand -hex 16
+rds_password = "REPLACE_WITH_STRONG_PASSWORD"
+
+# ---- Application secrets ---------------------------------------------------
+# Generate: openssl rand -hex 32
+jwt_secret = "REPLACE_WITH_JWT_SECRET"
+
+# Generate: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+api_key_encryption_key = "REPLACE_WITH_FERNET_KEY"
+
+# Comma-separated CORS allowed origins
+frontend_urls_raw = "https://idealens.dev"

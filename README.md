@@ -4,7 +4,7 @@ An LLM-powered idea analysis tool. Describe any idea in natural language; Claude
 knowledge graph — nodes for concepts, requirements, benefits, flaws, gaps, alternatives — while
 you chat. Edit nodes directly, ask follow-up questions, and watch the graph evolve in real time.
 
-Version: 0.3.6
+Version: 0.4.0
 
 ---
 
@@ -176,19 +176,17 @@ pre-commit run --all-files
 │   ├── playwright.config.ts            # Chromium only, webServer starts bun run dev
 │   └── src/lib/example.test.ts         # 62 tests across stores, schemas, utils
 │
-├── infra/
-│   ├── Dockerfile.backend      # Multi-stage Python/uv image
-│   └── Dockerfile.frontend     # Multi-stage Bun builder + Node runner
-│
 ├── deploy/
+│   ├── Dockerfile.backend      # Multi-stage Python/uv image
+│   ├── Dockerfile.frontend     # Multi-stage Bun builder + Node runner
+│   ├── docker-compose.dev.yml  # PostgreSQL for local dev + test DB init
+│   ├── docker-compose.yaml     # Full app (backend + frontend)
 │   ├── aws/
 │   │   ├── setup-infra.sh      # One-time: RDS, VPC connector, Secrets Manager
 │   │   ├── deploy.sh           # ECR + App Runner (reads root .env)
 │   │   └── README.md           # Full AWS setup procedure
-│   ├── gcp/deploy.sh           # Artifact Registry + Cloud Run
-│   └── azure/deploy.sh         # ACR + Container Apps
-│
-├── infra/docker-compose.dev.yml  # PostgreSQL for local dev + test DB init
+│   ├── gcp/deploy.sh           # Artifact Registry + Cloud Run (placeholder)
+│   └── azure/deploy.sh         # ACR + Container Apps (placeholder)
 ├── .github/workflows/          # ci.yaml + deploy-{aws,gcp,azure}.yaml
 ├── Makefile
 └── docs/plan/                  # Architecture, todos, implementation plans

@@ -10,9 +10,22 @@ Both services (backend and frontend) are containerised and deployed independentl
 
 ---
 
+## Docker assets
+
+| File | Purpose |
+|---|---|
+| `Dockerfile.backend` | Production image — Python 3.12 + uv, deps cached in a separate layer |
+| `Dockerfile.frontend` | Multi-stage build — Bun builder + Node 24 Alpine runner; accepts `PUBLIC_API_URL` build arg (compiled into bundle by Vite) |
+| `docker-compose.dev.yml` | PostgreSQL only — used by `make db` for local dev |
+| `docker-compose.yaml` | Full app (backend + frontend); reads env vars from `../.env` |
+
+---
+
 ## Provider guides
 
 - [AWS (App Runner + RDS)](aws/README.md) — includes RDS, VPC connector, Secrets Manager setup
+- **GCP** — `gcp/deploy.sh` is an initial placeholder. Provisions Cloud Run + Artifact Registry. Database and secrets management not yet wired up.
+- **Azure** — `azure/deploy.sh` is an initial placeholder. Provisions Container Apps + ACR. Database and secrets management not yet wired up.
 
 ---
 

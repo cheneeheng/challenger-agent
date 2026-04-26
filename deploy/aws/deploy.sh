@@ -1,248 +1,142 @@
 #!/usr/bin/env bash
-# Deploy to AWS — pushes images to ECR then deploys to App Runner.
+# Deploy to AWS — builds ARM64 API image, pushes to ECR, updates EC2 via SSM,
+# builds frontend SPA, syncs to S3, and invalidates CloudFront.
 #
 # Prerequisites:
-#   aws CLI configured (aws configure)
-#   docker
-#   Run deploy/aws/setup-infra.sh once before the first deploy.
+#   aws CLI configured, docker with buildx (buildx build --platform linux/arm64)
+#   bun installed locally for frontend build
+#   Terraform applied: EC2 instance, S3 bucket, and CloudFront distribution exist
+#   terraform output values stored in GitHub Actions secrets (see README)
 #
 # Required env vars:
-#   APP_NAME                — used for ECR repo names and App Runner service names
-#   APPRUNNER_ECR_ROLE_ARN  — IAM role ARN with AmazonEC2ContainerRegistryReadOnly
-#   DATABASE_URL            — postgresql+asyncpg://user:pass@host:5432/db
-#   JWT_SECRET              — min 32 chars; generate: openssl rand -hex 32
-#   API_KEY_ENCRYPTION_KEY  — Fernet key; generate: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+#   APP_NAME              — matches var.app_name in terraform.tfvars
+#   ECR_REGISTRY          — terraform output: ecr_registry
+#   EC2_INSTANCE_ID       — terraform output: ec2_instance_id
+#   S3_BUCKET             — terraform output: s3_bucket
+#   CF_DISTRIBUTION_ID    — terraform output: cloudfront_distribution_id
+#   API_URL               — public API URL e.g. https://api.idealens.dev
 #
 # Optional env vars:
-#   AWS_REGION           — defaults to us-east-1
-#   IMAGE_TAG            — defaults to git SHA
-#   VPC_CONNECTOR_ARN    — attach backend to VPC so it can reach a private RDS instance
-#   FRONTEND_URLS_RAW    — comma-separated CORS origins; defaults to the deployed frontend URL
-#   SEED_ANTHROPIC_API_KEY — pre-seed an Anthropic key for the first user (optional)
+#   AWS_REGION            — defaults to us-east-1
+#   IMAGE_TAG             — defaults to git short SHA
 
 set -euo pipefail
 
-# Load .env from repo root if present. Explicit env exports take precedence
-# because set -o allexport exports sourced vars but does not override existing ones.
 REPO_ROOT=$(git rev-parse --show-toplevel)
+
+# Load root .env if present; explicit exports take precedence.
 if [ -f "$REPO_ROOT/.env" ]; then
-  # shellcheck source=/dev/null
   set -o allexport
+  # shellcheck source=/dev/null
   source <(grep -vE '^\s*(#|$)' "$REPO_ROOT/.env")
   set +o allexport
 fi
 
 APP_NAME=${APP_NAME:?Set APP_NAME}
-ROLE_ARN=${APPRUNNER_ECR_ROLE_ARN:?Set APPRUNNER_ECR_ROLE_ARN}
-DATABASE_URL=${DATABASE_URL:?Set DATABASE_URL}
-JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET}
-API_KEY_ENCRYPTION_KEY=${API_KEY_ENCRYPTION_KEY:?Set API_KEY_ENCRYPTION_KEY}
+ECR_REGISTRY=${ECR_REGISTRY:?Set ECR_REGISTRY}
+EC2_INSTANCE_ID=${EC2_INSTANCE_ID:?Set EC2_INSTANCE_ID}
+S3_BUCKET=${S3_BUCKET:?Set S3_BUCKET}
+CF_DISTRIBUTION_ID=${CF_DISTRIBUTION_ID:?Set CF_DISTRIBUTION_ID}
+API_URL=${API_URL:?Set API_URL}
+
 AWS_REGION=${AWS_REGION:-us-east-1}
 IMAGE_TAG=${IMAGE_TAG:-$(git rev-parse --short HEAD)}
-VPC_CONNECTOR_ARN=${VPC_CONNECTOR_ARN:-}
-SEED_ANTHROPIC_API_KEY=${SEED_ANTHROPIC_API_KEY:-}
 
-AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-REGISTRY="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
+ECR_REPO="${ECR_REGISTRY}/${APP_NAME}-api"
 
-BACKEND_REPO="$APP_NAME-backend"
-FRONTEND_REPO="$APP_NAME-frontend"
-
-REPO_ROOT=$(git rev-parse --show-toplevel)
-
+# ---------------------------------------------------------------------------
+# Backend — build ARM64 image and push to ECR
+# ---------------------------------------------------------------------------
 echo "==> Logging in to ECR"
 aws ecr get-login-password --region "$AWS_REGION" \
-  | docker login --username AWS --password-stdin "$REGISTRY"
+  | docker login --username AWS --password-stdin "$ECR_REGISTRY"
 
-echo "==> Ensuring ECR repositories exist"
-for repo in "$BACKEND_REPO" "$FRONTEND_REPO"; do
-  aws ecr describe-repositories --repository-names "$repo" --region "$AWS_REGION" 2>/dev/null \
-    || aws ecr create-repository --repository-name "$repo" --region "$AWS_REGION" \
-         --image-scanning-configuration scanOnPush=true
+echo "==> Building backend (linux/arm64)"
+docker buildx build \
+  --platform linux/arm64 \
+  -t "${ECR_REPO}:${IMAGE_TAG}" \
+  -t "${ECR_REPO}:latest" \
+  -f "$REPO_ROOT/deploy/Dockerfile.backend" \
+  --push \
+  "$REPO_ROOT/backend"
+
+# ---------------------------------------------------------------------------
+# Backend deploy — SSM RunCommand on EC2 (no SSH keys required)
+# ---------------------------------------------------------------------------
+echo "==> Deploying backend via SSM"
+
+COMMAND_ID=$(aws ssm send-command \
+  --region "$AWS_REGION" \
+  --instance-ids "$EC2_INSTANCE_ID" \
+  --document-name "AWS-RunShellScript" \
+  --parameters "commands=[
+    \"aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}\",
+    \"cd /opt/${APP_NAME} && docker compose pull\",
+    \"cd /opt/${APP_NAME} && docker compose up -d --remove-orphans\",
+    \"docker image prune -f\"
+  ]" \
+  --output text \
+  --query "Command.CommandId")
+
+echo "  SSM command: $COMMAND_ID — waiting..."
+
+# Poll until the command finishes (timeout after ~5 min)
+for i in $(seq 1 30); do
+  STATUS=$(aws ssm get-command-invocation \
+    --region "$AWS_REGION" \
+    --command-id "$COMMAND_ID" \
+    --instance-id "$EC2_INSTANCE_ID" \
+    --query "Status" --output text 2>/dev/null || echo "Pending")
+  case "$STATUS" in
+    Success)
+      echo "  EC2 deploy succeeded"
+      break
+      ;;
+    Failed|Cancelled|TimedOut|Undeliverable)
+      echo "  EC2 deploy failed (status: $STATUS)"
+      aws ssm get-command-invocation \
+        --region "$AWS_REGION" \
+        --command-id "$COMMAND_ID" \
+        --instance-id "$EC2_INSTANCE_ID" \
+        --query "StandardErrorContent" --output text
+      exit 1
+      ;;
+    *)
+      echo "  Status: $STATUS — waiting 10s..."
+      sleep 10
+      ;;
+  esac
 done
 
 # ---------------------------------------------------------------------------
-# Backend — build, push, deploy first so we know the URL before building
-# the frontend image (PUBLIC_API_URL is compiled into the bundle by Vite).
+# Frontend — build SPA with PUBLIC_API_URL baked in, sync to S3
 # ---------------------------------------------------------------------------
-echo "==> Building and pushing backend"
-docker build \
-  --platform linux/amd64 \
-  -t "$REGISTRY/$BACKEND_REPO:$IMAGE_TAG" \
-  -t "$REGISTRY/$BACKEND_REPO:latest" \
-  -f "$REPO_ROOT/infra/Dockerfile.backend" \
-  "$REPO_ROOT/backend"
-docker push "$REGISTRY/$BACKEND_REPO:$IMAGE_TAG"
-docker push "$REGISTRY/$BACKEND_REPO:latest"
+echo "==> Building frontend SPA (PUBLIC_API_URL=$API_URL)"
+cd "$REPO_ROOT/frontend"
+PUBLIC_API_URL="$API_URL" bun run build
 
-echo "==> Deploying backend to App Runner"
-
-# Build the network-configuration fragment only when a VPC connector is set.
-if [ -n "$VPC_CONNECTOR_ARN" ]; then
-  NETWORK_CONFIG=", \"NetworkConfiguration\": { \"EgressConfiguration\": { \"EgressType\": \"VPC\", \"VpcConnectorArn\": \"$VPC_CONNECTOR_ARN\" } }"
-else
-  NETWORK_CONFIG=""
-fi
-
-BACKEND_ENV_VARS="\"ENVIRONMENT\": \"production\", \"DATABASE_URL\": \"$DATABASE_URL\", \"JWT_SECRET\": \"$JWT_SECRET\", \"API_KEY_ENCRYPTION_KEY\": \"$API_KEY_ENCRYPTION_KEY\", \"SEED_ANTHROPIC_API_KEY\": \"$SEED_ANTHROPIC_API_KEY\""
-
-if aws apprunner list-services \
-     --query "ServiceSummaryList[?ServiceName=='$APP_NAME-backend']" \
-     --output text --region "$AWS_REGION" | grep -q "$APP_NAME-backend"; then
-  aws apprunner update-service \
-    --region "$AWS_REGION" \
-    --service-arn "$(aws apprunner list-services \
-      --query "ServiceSummaryList[?ServiceName=='$APP_NAME-backend'].ServiceArn" \
-      --output text --region "$AWS_REGION")" \
-    --source-configuration "{
-      \"ImageRepository\": {
-        \"ImageIdentifier\": \"$REGISTRY/$BACKEND_REPO:$IMAGE_TAG\",
-        \"ImageRepositoryType\": \"ECR\",
-        \"ImageConfiguration\": {
-          \"Port\": \"8000\",
-          \"RuntimeEnvironmentVariables\": { $BACKEND_ENV_VARS }
-        }
-      },
-      \"AuthenticationConfiguration\": { \"AccessRoleArn\": \"$ROLE_ARN\" },
-      \"AutoDeploymentsEnabled\": false
-    }" \
-    $([ -n "$NETWORK_CONFIG" ] && echo "--network-configuration {\"EgressConfiguration\":{\"EgressType\":\"VPC\",\"VpcConnectorArn\":\"$VPC_CONNECTOR_ARN\"}}")
-else
-  aws apprunner create-service \
-    --region "$AWS_REGION" \
-    --service-name "$APP_NAME-backend" \
-    --source-configuration "{
-      \"ImageRepository\": {
-        \"ImageIdentifier\": \"$REGISTRY/$BACKEND_REPO:$IMAGE_TAG\",
-        \"ImageRepositoryType\": \"ECR\",
-        \"ImageConfiguration\": {
-          \"Port\": \"8000\",
-          \"RuntimeEnvironmentVariables\": { $BACKEND_ENV_VARS }
-        }
-      },
-      \"AuthenticationConfiguration\": { \"AccessRoleArn\": \"$ROLE_ARN\" },
-      \"AutoDeploymentsEnabled\": false
-    }" \
-    --health-check-configuration "Protocol=HTTP,Path=/health" \
-    $([ -n "$VPC_CONNECTOR_ARN" ] && echo "--network-configuration {\"EgressConfiguration\":{\"EgressType\":\"VPC\",\"VpcConnectorArn\":\"$VPC_CONNECTOR_ARN\"}}")
-fi
-
-# Wait for the backend to be running so the URL is stable before building frontend.
-echo "  Waiting for backend service to be running..."
-aws apprunner wait service-running \
-  --service-arn "$(aws apprunner list-services \
-    --query "ServiceSummaryList[?ServiceName=='$APP_NAME-backend'].ServiceArn" \
-    --output text --region "$AWS_REGION")" \
+echo "==> Syncing Vite assets to S3 (immutable cache)"
+# Vite assets have content-hashed filenames — safe to cache for 1 year
+aws s3 sync dist/ "s3://${S3_BUCKET}/" \
+  --delete \
+  --exclude "index.html" \
+  --cache-control "public, max-age=31536000, immutable" \
   --region "$AWS_REGION"
 
-BACKEND_URL=$(aws apprunner list-services \
-  --query "ServiceSummaryList[?ServiceName=='$APP_NAME-backend'].ServiceUrl" \
-  --output text --region "$AWS_REGION")
+echo "==> Uploading index.html (no-cache)"
+# index.html must not be cached — it references hashed asset URLs
+aws s3 cp dist/index.html "s3://${S3_BUCKET}/index.html" \
+  --cache-control "no-cache, no-store, must-revalidate" \
+  --region "$AWS_REGION"
 
-# FRONTEND_URLS_RAW defaults to the deployed frontend URL; set it explicitly if
-# you know the frontend URL in advance (e.g. custom domain).
-FRONTEND_URLS_RAW=${FRONTEND_URLS_RAW:-"https://$BACKEND_URL"}
-
-# Update backend now that we know FRONTEND_URLS_RAW.
-aws apprunner update-service \
-  --region "$AWS_REGION" \
-  --service-arn "$(aws apprunner list-services \
-    --query "ServiceSummaryList[?ServiceName=='$APP_NAME-backend'].ServiceArn" \
-    --output text --region "$AWS_REGION")" \
-  --source-configuration "{
-    \"ImageRepository\": {
-      \"ImageIdentifier\": \"$REGISTRY/$BACKEND_REPO:$IMAGE_TAG\",
-      \"ImageRepositoryType\": \"ECR\",
-      \"ImageConfiguration\": {
-        \"Port\": \"8000\",
-        \"RuntimeEnvironmentVariables\": {
-          $BACKEND_ENV_VARS,
-          \"FRONTEND_URLS_RAW\": \"$FRONTEND_URLS_RAW\"
-        }
-      }
-    },
-    \"AuthenticationConfiguration\": { \"AccessRoleArn\": \"$ROLE_ARN\" },
-    \"AutoDeploymentsEnabled\": false
-  }"
-
-# ---------------------------------------------------------------------------
-# Frontend — built after backend so PUBLIC_API_URL can be passed as a build
-# arg and compiled into the bundle by Vite ($env/static/public).
-# ---------------------------------------------------------------------------
-echo "==> Building and pushing frontend"
-docker build \
-  --platform linux/amd64 \
-  --build-arg PUBLIC_API_URL="https://$BACKEND_URL" \
-  -t "$REGISTRY/$FRONTEND_REPO:$IMAGE_TAG" \
-  -t "$REGISTRY/$FRONTEND_REPO:latest" \
-  -f "$REPO_ROOT/infra/Dockerfile.frontend" \
-  "$REPO_ROOT/frontend"
-docker push "$REGISTRY/$FRONTEND_REPO:$IMAGE_TAG"
-docker push "$REGISTRY/$FRONTEND_REPO:latest"
-
-echo "==> Deploying frontend to App Runner"
-if aws apprunner list-services \
-     --query "ServiceSummaryList[?ServiceName=='$APP_NAME-frontend']" \
-     --output text --region "$AWS_REGION" | grep -q "$APP_NAME-frontend"; then
-  aws apprunner update-service \
-    --region "$AWS_REGION" \
-    --service-arn "$(aws apprunner list-services \
-      --query "ServiceSummaryList[?ServiceName=='$APP_NAME-frontend'].ServiceArn" \
-      --output text --region "$AWS_REGION")" \
-    --source-configuration "{
-      \"ImageRepository\": {
-        \"ImageIdentifier\": \"$REGISTRY/$FRONTEND_REPO:$IMAGE_TAG\",
-        \"ImageRepositoryType\": \"ECR\",
-        \"ImageConfiguration\": { \"Port\": \"3000\" }
-      },
-      \"AuthenticationConfiguration\": { \"AccessRoleArn\": \"$ROLE_ARN\" },
-      \"AutoDeploymentsEnabled\": false
-    }"
-else
-  aws apprunner create-service \
-    --region "$AWS_REGION" \
-    --service-name "$APP_NAME-frontend" \
-    --source-configuration "{
-      \"ImageRepository\": {
-        \"ImageIdentifier\": \"$REGISTRY/$FRONTEND_REPO:$IMAGE_TAG\",
-        \"ImageRepositoryType\": \"ECR\",
-        \"ImageConfiguration\": { \"Port\": \"3000\" }
-      },
-      \"AuthenticationConfiguration\": { \"AccessRoleArn\": \"$ROLE_ARN\" },
-      \"AutoDeploymentsEnabled\": false
-    }"
-fi
-
-# App Runner assigns a URL with a random hash (e.g. abc123.us-east-1.awsapprunner.com).
-# The URL is only stable after the service is RUNNING, so ORIGIN is set in a second pass.
-FRONTEND_URL=$(aws apprunner list-services \
-  --query "ServiceSummaryList[?ServiceName=='$APP_NAME-frontend'].ServiceUrl" \
-  --output text --region "$AWS_REGION")
-
-FRONTEND_ARN=$(aws apprunner list-services \
-  --query "ServiceSummaryList[?ServiceName=='$APP_NAME-frontend'].ServiceArn" \
-  --output text --region "$AWS_REGION")
-
-echo "==> Setting ORIGIN on frontend (second pass)"
-aws apprunner update-service \
-  --region "$AWS_REGION" \
-  --service-arn "$FRONTEND_ARN" \
-  --source-configuration "{
-    \"ImageRepository\": {
-      \"ImageIdentifier\": \"$REGISTRY/$FRONTEND_REPO:$IMAGE_TAG\",
-      \"ImageRepositoryType\": \"ECR\",
-      \"ImageConfiguration\": {
-        \"Port\": \"3000\",
-        \"RuntimeEnvironmentVariables\": {
-          \"ORIGIN\": \"https://$FRONTEND_URL\"
-        }
-      }
-    },
-    \"AuthenticationConfiguration\": { \"AccessRoleArn\": \"$ROLE_ARN\" },
-    \"AutoDeploymentsEnabled\": false
-  }"
+echo "==> Invalidating CloudFront"
+INVALIDATION_ID=$(aws cloudfront create-invalidation \
+  --distribution-id "$CF_DISTRIBUTION_ID" \
+  --paths "/*" \
+  --query "Invalidation.Id" --output text)
 
 echo ""
-echo "Deployment complete."
-echo "  Backend:  https://$BACKEND_URL"
-echo "  Frontend: https://$FRONTEND_URL"
+echo "Deploy complete."
+echo "  Backend:  ${API_URL}/health"
+echo "  Frontend: check CloudFront domain (terraform output cloudfront_domain)"
+echo "  CF invalidation: $INVALIDATION_ID"

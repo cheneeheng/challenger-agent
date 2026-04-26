@@ -50,7 +50,7 @@ Cost:     ~$5/month (Railway Hobby) + €0 Neon + €0 Vercel
 - Database schema — identical PostgreSQL; Alembic migrations run as-is
 - Auth flow (JWT + httpOnly cookie) — works across origins with one config tweak
 - SSE streaming — Railway runs a persistent container, no cold-start concerns
-- `infra/Dockerfile.backend` — reused by Railway directly
+- `deploy/Dockerfile.backend` — reused by Railway directly
 
 ---
 
@@ -222,7 +222,7 @@ cd backend
 railway init   # creates a new project; name it "idealens"
 ```
 
-Railway auto-detects `infra/Dockerfile.backend`. If it doesn't pick it up automatically, point to it via `railway.toml` (see §5.2).
+Railway auto-detects `deploy/Dockerfile.backend`. If it doesn't pick it up automatically, point to it via `railway.toml` (see §5.2).
 
 ### 5.2 Configure `railway.toml`
 
@@ -230,7 +230,7 @@ Create `backend/railway.toml`:
 
 ```toml
 [build]
-  dockerfilePath = "../infra/Dockerfile.backend"
+  dockerfilePath = "../deploy/Dockerfile.backend"
   dockerContext = "."
   target = "production"
 
@@ -273,7 +273,7 @@ In the Railway dashboard → your service → **Variables**, add:
 railway up
 ```
 
-Railway builds the Docker image remotely from `infra/Dockerfile.backend` and deploys it as a persistent container. No ECR, no local image push required.
+Railway builds the Docker image remotely from `deploy/Dockerfile.backend` and deploys it as a persistent container. No ECR, no local image push required.
 
 ### 5.5 Verify
 

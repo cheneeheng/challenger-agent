@@ -4,6 +4,66 @@ Format: `[version] YYYY-MM-DD — description`
 
 ---
 
+## [1.0.0] 2026-04-27 — IdeaLens v1: full application, test suite, and multi-cloud deployment
+
+First production release. This entry covers all changes relative to the `main` branch (template scaffold). The complete build history is documented in the `[0.x.x]` entries below.
+
+### Application
+
+- **IdeaLens** — LLM-powered idea analysis tool. Describe any idea in natural language; Claude builds a live knowledge graph while you chat. Edit nodes directly, ask follow-up questions, and watch the graph evolve in real time.
+- **Streaming analysis** — `POST /api/chat` returns a `StreamingResponse` with `token`, `graph_action`, `ping`, `error`, and `done` SSE events. A queue-based producer/consumer runs the LLM call and a 15-second heartbeat concurrently. `Last-Event-ID` replay on reconnect.
+- **Live knowledge graph** — Nodes auto-positioned with Dagre layout after each response; animated scale-in transitions on add. 10 dimension types: `concept`, `requirement`, `benefit`, `drawback`, `gap`, `flaw`, `feasibility`, `alternative`, `question`, `root`.
+- **Graph editing** — Add nodes (9 types via modal), delete nodes, drag to reposition (`userPositioned` flag), right-click context menu, connect nodes, auto-layout, delete edges. All edits persisted as system messages.
+- **Node detail panel** — Slide-over showing node content with inline edit and "Ask Claude" pre-fill. Escape to close.
+- **Session persistence** — Graph state (`JSONB`), chat history (including system action messages), and model selection persisted to PostgreSQL. Debounced auto-save on graph changes.
+- **Context window management** — When `session.messages` exceeds `CONTEXT_WINDOW_MAX_MESSAGES` (default 20), oldest messages are summarised with `claude-haiku-4-5` and injected as context on subsequent calls.
+- **Multi-model** — Haiku (fast), Sonnet (default), Opus (thorough). Model IDs configurable via `ALLOWED_CLAUDE_MODELS_RAW`.
+- **Inline session rename** — Double-click session title in `AppHeader` to rename.
+- **Delete-with-undo toast** — Session deletions on the dashboard are reversible within a short window.
+
+### Backend (`backend/app/`)
+
+- **Auth** — JWT access tokens (15 min) + httpOnly refresh cookie (7 days, scoped to `/auth`). Refresh tokens stored in DB for revocation. bcrypt password hashing. `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`.
+- **Users** — Profile update, password change, Anthropic API key management (Fernet-encrypted at rest, validated against Anthropic API on save), account deletion (`DELETE /users/me`).
+- **Sessions** — Full CRUD (`GET`, `POST`, `PATCH`, `DELETE`), graph state `PUT`, and `POST /sessions/{id}/messages` for system message persistence. Rate-limited at 60 req/min. `SELECT MAX ... FOR UPDATE` prevents `message_index` races.
+- **LLM service** — `build_messages`, `stream_with_heartbeat`, `parse_llm_response`, `summarize_messages`, `persist_messages`. Structured `LLMResponse` with `graph_actions` array; each action validated against a Pydantic discriminated union (`add`, `update`, `delete`, `connect`).
+- **Database** — SQLAlchemy 2 async (`asyncpg`), `expire_on_commit=False`. Four models: `User`, `RefreshToken`, `Session` (JSONB `graph_state`), `Message` (`metadata_` avoids SQLAlchemy reserved-name conflict). Alembic async migrations.
+- **Security** — Fernet encryption for API keys. SlowAPI rate limiting. CORS configured from `FRONTEND_URLS_RAW`. Security headers middleware.
+- **Config** — pydantic-settings v2 `Settings` with `get_settings()` lru_cache. List fields use `_RAW` suffix + `@property` to work around pydantic-settings JSON-decoding before validators run.
+- **Neon support** — SSL auto-enabled when `neon.tech` appears in `DATABASE_URL`. Refresh cookie `samesite=lax` for cross-origin Railway/Vercel setup.
+- **`backend/railway.toml`** — Railway service configuration for direct repo deploy.
+
+### Frontend (`frontend/src/`)
+
+- **SvelteKit 2 + Svelte 5 runes** — `$props()`, `$state()`, `$derived()`, `{@render ...}`. SPA mode (`ssr = false`). TailwindCSS 4 via Vite plugin (no `tailwind.config.js`). TypeScript strict.
+- **Routes** — `login/`, `register/`, `(protected)/` (auth guard), `(protected)/settings/` (profile, API key, password, account deletion), `(protected)/(requires-api-key)/` (API key guard), `(protected)/(requires-api-key)/+page.svelte` (dashboard), `(protected)/(requires-api-key)/session/[id]/` (workspace).
+- **Stores** — `authStore` (localStorage persistence), `chatStore` (streaming state), `graphStore` (`applyGraphActions`, `getSnapshot`, `highlightedNodeIds`, `fitViewSignal`), `sessionStore` (CRUD + debounced save).
+- **Services** — `api.ts` (Axios + Bearer interceptor + 401 auto-refresh), `authService`, `userService`, `sessionService`, `chatService`.
+- **Graph** — `GraphPanel.svelte` (@xyflow/svelte controlled flow), `GraphToolbar.svelte`, `NodeDetailPanel.svelte`, `AnalysisNodeComponent.svelte` (per-type colour + `node-pulse` animation), `AddNodeModal.svelte`, `FitViewEffect.svelte` (calls `fitView()` inside flow tree context).
+- **Schemas** — Zod schemas for graph types and all four LLM graph action branches. Validated on every `applyGraphActions` call.
+- **Utils** — `graphLayout.ts` (Dagre, respects `userPositioned`), `graphStyles.ts`, `debounce.ts`, `graphGuards.ts`.
+- **Vercel adapter** — `@sveltejs/adapter-vercel` conditionally applied when `VERCEL=1` is set at build time; falls back to `adapter-node` for Docker/self-hosted.
+- **Error boundaries** — `<svelte:boundary>` in session workspace; `+error.svelte` for 404/500.
+
+### Testing
+
+- **Backend** — 104 pytest tests, 99% coverage. NullPool per-test async engine with SAVEPOINT transaction isolation. Tests: `test_auth`, `test_users`, `test_sessions`, `test_chat`, `test_services`, `test_schemas`.
+- **Frontend unit** — 81 Vitest tests: `graphStore` (21), `chatStore` (11), Zod schemas (19 incl. all 10 dimension types + 4 LLM action branches), `graphLayout` (6), `debounce` (4), `graphGuards`, `chatService`.
+- **E2E** — 5 Playwright tests (Chromium). `auth.spec.ts`: register-and-redirect, login, logout, duplicate-email. `user-journey.spec.ts`: full happy-path — register → set API key → create analysis → interact with graph → send follow-up → edit node → navigate to settings → delete account.
+- **Deploy scripts** — 9 bash tests: Dockerfile syntax (`docker build --check`), required-variable enforcement for all three deploy scripts.
+- **CI** — GitHub Actions: `backend-tests`, `backend-lint` (ruff), `frontend-build` (svelte-check + tsc + vite build), `frontend-tests` (vitest), `deploy-scripts` jobs. Triggers: push to `main`/`feat/**`/`fix/**` + PR + `workflow_dispatch`.
+
+### Infrastructure & Deployment
+
+- **Railway + Vercel + Neon** (`deploy/railway/README.md`) — Lowest-ops path. Backend via `railway.toml`, frontend via `@sveltejs/adapter-vercel`, database via Neon managed PostgreSQL. Step-by-step guide included.
+- **AWS Terraform** (`deploy/aws/terraform/`) — EC2 t4g.small (ARM/Graviton2) + Nginx + Let's Encrypt, S3 + CloudFront SPA, RDS db.t3.micro PostgreSQL 16 in private subnet, ECR (ARM64, lifecycle 10 images), Secrets Manager. Seven child modules: `cloudfront`, `ec2`, `ecr`, `networking`, `rds`, `s3`, `secrets`. Bootstrap module for remote state. Estimated ~$26/month.
+- **AWS deploy script** (`deploy/aws/deploy.sh`) — Builds ARM64 image via `docker buildx`, pushes to ECR, deploys to EC2 via SSM, builds SPA locally, syncs to S3, invalidates CloudFront.
+- **GCP Cloud Run** / **Azure Container Apps** — Deploy scripts in `deploy/gcp/` and `deploy/azure/`.
+- **Docker** — Multi-stage `Dockerfile.backend` (uv, ARM64-capable) and `Dockerfile.frontend` (Bun builder → Node runner). `docker-compose.dev.yml` for local PostgreSQL dev. `docker-compose.yaml` for full self-hosted stack.
+- **Devcontainer** — Ubuntu 24.04, Python 3.12, Node 24, Bun, Claude Code CLI. External `backend` Docker network for direct postgres connectivity. `~/.claude` bind mount for persistent auth.
+
+---
+
 ## [0.4.0] 2026-04-26 — Terraform AWS infrastructure, deploy restructure, infra → deploy migration
 
 ### Added

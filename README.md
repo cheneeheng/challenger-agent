@@ -4,7 +4,7 @@ An LLM-powered idea analysis tool. Describe any idea in natural language; Claude
 knowledge graph — nodes for concepts, requirements, benefits, flaws, gaps, alternatives — while
 you chat. Edit nodes directly, ask follow-up questions, and watch the graph evolve in real time.
 
-Version: 0.4.0
+Version: 1.0.0
 
 ---
 
@@ -249,23 +249,36 @@ bash deploy/tests/test_deploy_scripts.sh
 
 ## What's not yet built
 
-See [`docs/plan/02_TODOS.md`](docs/plan/02_TODOS.md) for the full status. Deferred items:
-
-- Production deployment (AWS Terraform or Railway + Neon + Vercel — see `docs/plan/05_INFRASTRUCTURE_AND_DEPLOYMENT_*.md`)
+See [`docs/plan/02_TODOS.md`](docs/plan/02_TODOS.md) for the full status. All major features are shipped as of v1.0.0. No blocking deferred items remain.
 
 ---
 
 ## Deployment
 
-All deploy scripts read from the root `.env`. Fill in the relevant section and run the script. See [`deploy/README.md`](deploy/README.md) and the per-provider guides for full instructions.
+Four deployment paths are supported. See [`deploy/README.md`](deploy/README.md) and the per-provider guides for full instructions.
+
+**Railway + Vercel + Neon (recommended easiest path)**
+
+See [`deploy/railway/README.md`](deploy/railway/README.md) for step-by-step setup. No Docker required; the backend deploys directly from the repo via `backend/railway.toml`. The frontend deploys to Vercel using `@sveltejs/adapter-vercel`.
+
+**AWS (Terraform — EC2 + S3 + CloudFront + RDS)**
 
 ```bash
-# AWS App Runner (first time: run setup-infra.sh first — see deploy/aws/README.md)
+# First time: provision infra with Terraform (see deploy/aws/README.md)
+cd deploy/aws/terraform && terraform apply
+
+# Subsequent deploys
 bash deploy/aws/deploy.sh
+```
 
-# GCP Cloud Run
+**GCP Cloud Run**
+
+```bash
 bash deploy/gcp/deploy.sh
+```
 
-# Azure Container Apps
+**Azure Container Apps**
+
+```bash
 bash deploy/azure/deploy.sh
 ```

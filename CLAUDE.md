@@ -15,8 +15,15 @@ PostgreSQL runs in Docker via `make db`. `make dev` starts it automatically.
 On first run or after a schema change:
 
 ```bash
+cp .env.example .env                       # Fill in secrets (see file for required vars)
 make db                                    # Start postgres container (detached)
 cd backend && uv run alembic upgrade head  # Apply migrations
+```
+
+**Frontend env vars** live in `frontend/.env.development` and `frontend/.env.production` (Vite requires them alongside `vite.config.ts`):
+```
+PUBLIC_API_URL=http://localhost:8000   # .env.development
+PUBLIC_API_URL=<deployed backend URL>  # .env.production
 ```
 
 ## Commands
@@ -79,7 +86,7 @@ db/
   models/             # User, RefreshToken, Session, Message
   session.py          # Async DB session factory (expire_on_commit=False)
   base.py             # Async engine + AsyncSessionLocal
-tests/                # 104 tests, 99% coverage
+tests/                # 104 tests
 ```
 
 Routes call services; services own business logic and call models/db. Schemas are strictly input/output contracts — no model objects leak into API responses.
@@ -93,8 +100,8 @@ routes/               # File-based routing (+page.svelte, +layout.svelte, +page.
 lib/
   components/         # chat/, layout/ subdirectories; graph/ has GraphPanel, GraphToolbar,
                       #   NodeDetailPanel, FitViewEffect, AddNodeModal, nodes/
-  stores/             # authStore, chatStore, graphStore, sessionStore
-  services/           # authService, chatService (+ chatService.test.ts), sessionService, userService
+  stores/             # authStore, chatStore (+ chatStore.test.ts), graphStore (+ graphStore.test.ts), sessionStore
+  services/           # api.ts (base fetch client), authService, chatService (+ chatService.test.ts), sessionService, userService
   schemas/            # graph.ts — Zod schemas for LLM graph actions
   utils/              # graphLayout.ts (Dagre), graphStyles.ts, debounce.ts, graphGuards.ts
 e2e/                  # Playwright E2E tests (auth.spec.ts, user-journey.spec.ts, helpers.ts)
@@ -108,6 +115,10 @@ Svelte 5 runes syntax (`$props()`, `$state()`, `$derived()`, `{@render ...}`). T
 |----------|------|
 | Backend  | 8000 |
 | Frontend | 5173 |
+
+## Deployment
+
+Deployment configs live in `deploy/` — subdirectories per provider: `aws/`, `gcp/`, `azure/`, `railway/`, plus `docker-compose.yaml` for self-hosted. See `deploy/README.md` for provider-specific steps.
 
 ## Code Quality
 

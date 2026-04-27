@@ -1,6 +1,17 @@
+---
+doc: 08_LLM_AND_PROMPT
+status: ready
+version: 1
+created: 2026-04-18
+scope: Full system prompt, output format spec, context injection strategy, model behaviour notes, pre-deployment test checklist
+relates_to:
+  - 03_ARCHITECTURE
+  - 06_BACKEND_IMPLEMENTATION
+---
 # LLM & SYSTEM PROMPT REFERENCE
-> Authoritative guide for the LLM integration, system prompt, and analysis behaviour.
-> Claude Code: read this before modifying any prompt or LLM service code.
+*Claude Code: read this before modifying any prompt or LLM service code.*
+
+**Stack:** Python 3.12 · Anthropic SDK · claude-sonnet-4-6 (default) · claude-haiku-4-5 · claude-opus-4-6
 
 ---
 

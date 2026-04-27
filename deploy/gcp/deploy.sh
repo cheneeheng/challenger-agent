@@ -42,7 +42,7 @@ docker build \
   --platform linux/amd64 \
   -t "$REGISTRY/backend:$IMAGE_TAG" \
   -t "$REGISTRY/backend:latest" \
-  -f "$REPO_ROOT/infra/Dockerfile.backend" \
+  -f "$REPO_ROOT/deploy/Dockerfile.backend" \
   "$REPO_ROOT/backend"
 docker push "$REGISTRY/backend:$IMAGE_TAG"
 docker push "$REGISTRY/backend:latest"
@@ -52,7 +52,7 @@ docker build \
   --platform linux/amd64 \
   -t "$REGISTRY/frontend:$IMAGE_TAG" \
   -t "$REGISTRY/frontend:latest" \
-  -f "$REPO_ROOT/infra/Dockerfile.frontend" \
+  -f "$REPO_ROOT/deploy/Dockerfile.frontend" \
   "$REPO_ROOT/frontend"
 docker push "$REGISTRY/frontend:$IMAGE_TAG"
 docker push "$REGISTRY/frontend:latest"
@@ -81,7 +81,7 @@ gcloud run deploy "$APP_NAME-frontend" \
   --project "$GCP_PROJECT" \
   --port 3000 \
   --allow-unauthenticated \
-  --set-env-vars "PUBLIC_API_BASE_URL=$BACKEND_URL"
+  --set-env-vars "PUBLIC_API_URL=$BACKEND_URL"
 
 FRONTEND_URL=$(gcloud run services describe "$APP_NAME-frontend" \
   --platform managed \

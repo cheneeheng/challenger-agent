@@ -1,19 +1,30 @@
 [project]
 name = "backend"
-version = "0.0.1"
+version = "0.3.4"
 description = "FastAPI backend"
-authors = [{ name = "{{ author_name }}", email = "author@example.com" }]
+authors = [{ name = "EeHeng Chen", email = "author@example.com" }]
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: Apache 2.0 License",
     "Operating System :: OS Independent",
 ]
+license = "Apache-2.0"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.34.0",
+    "pydantic[email]>=2.0.0",
     "pydantic-settings>=2.7.0",
+    "structlog>=24.0.0",
+    "sqlalchemy[asyncio]>=2.0.0",
+    "asyncpg>=0.30.0",
+    "alembic>=1.14.0",
+    "python-jose[cryptography]>=3.3.0",
+    "bcrypt>=4.0.0",
+    "python-multipart>=0.0.9",
+    "cryptography>=42.0.0",
+    "anthropic>=0.40.0",
+    "slowapi>=0.1.9",
 ]
 
 [project.optional-dependencies]
@@ -35,12 +46,28 @@ build-backend = "setuptools.build_meta"
 # Find is relative to this pyproject.toml file.
 # [tool.setuptools.packages.find]
 # where = ["app"]
+[tool.setuptools.packages.find]
+include = ["app"]
+exclude = ["alembic"]
 
 [tool.pytest.ini_options]
 minversion = "6.0"
 addopts = "-ra -q --cov=app --cov-report=term-missing"
 testpaths = ["tests"]
 asyncio_mode = "auto"
+
+[tool.coverage.run]
+# SQLAlchemy asyncio uses greenlets internally; without this, lines inside
+# async route handlers that await DB calls appear uncovered.
+concurrency = ["greenlet", "thread"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "@(abc\\.)?abstractmethod",
+]
 
 [tool.ruff]
 target-version = "py312"

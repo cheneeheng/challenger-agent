@@ -1,0 +1,54 @@
+name: Deploy (Railway + Vercel)
+
+on:
+  workflow_dispatch:
+
+# Required repository secrets (Settings → Secrets and variables → Actions):
+#   RAILWAY_TOKEN              — Railway account token (Account → Tokens → New Token)
+#   VERCEL_TOKEN               — Vercel account token
+#   VERCEL_ORG_ID              — from `vercel whoami` or Vercel Settings
+#   VERCEL_PROJECT_ID_SVELTE   — from frontend/.vercel/project.json after first deploy
+#
+# One-time setup before first run:
+#   1. Provision Neon database — see docs/plan/05_INFRASTRUCTURE_AND_DEPLOYMENT_ALT.md §3
+#   2. Deploy backend to Railway — see §5
+#   3. Deploy frontend to Vercel — see §6
+#   4. Configure CORS + cookie settings — see §7
+
+jobs:
+  deploy-backend:
+    name: Deploy backend → Railway
+    if: false  # disabled — re-enable by removing this line
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy to Railway
+        run: railway up --service idealens-backend --detach
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+  deploy-frontend:
+    name: Deploy frontend → Vercel
+    if: false  # disabled — re-enable by removing this line
+    runs-on: ubuntu-latest
+    needs: deploy-backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel
+
+      - name: Deploy frontend
+        run: |
+          vercel deploy \
+            --prod \
+            --yes \
+            --cwd frontend \
+            --token ${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_SVELTE }}

@@ -1,0 +1,29 @@
+# Build stage
+FROM oven/bun:1 AS builder
+
+WORKDIR /app
+
+COPY package.json bun.lock* ./
+RUN bun install --frozen-lockfile
+
+# PUBLIC_API_URL is read by Vite at build time via $env/static/public.
+# Pass it as a build arg: docker build --build-arg PUBLIC_API_URL=https://...
+ARG PUBLIC_API_URL=""
+ENV PUBLIC_API_URL=$PUBLIC_API_URL
+
+COPY . .
+RUN bun run build
+
+# Runtime stage — node adapter output is a standard Node.js server
+FROM node:24-alpine AS runner
+
+WORKDIR /app
+
+COPY --from=builder /app/build ./build
+COPY --from=builder /app/package.json ./
+
+EXPOSE 3000
+
+ENV NODE_ENV=production
+
+CMD ["node", "build"]

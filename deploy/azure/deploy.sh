@@ -47,7 +47,7 @@ docker build \
   --platform linux/amd64 \
   -t "$ACR_LOGIN_SERVER/backend:$IMAGE_TAG" \
   -t "$ACR_LOGIN_SERVER/backend:latest" \
-  -f "$REPO_ROOT/infra/Dockerfile.backend" \
+  -f "$REPO_ROOT/deploy/Dockerfile.backend" \
   "$REPO_ROOT/backend"
 docker push "$ACR_LOGIN_SERVER/backend:$IMAGE_TAG"
 docker push "$ACR_LOGIN_SERVER/backend:latest"
@@ -57,7 +57,7 @@ docker build \
   --platform linux/amd64 \
   -t "$ACR_LOGIN_SERVER/frontend:$IMAGE_TAG" \
   -t "$ACR_LOGIN_SERVER/frontend:latest" \
-  -f "$REPO_ROOT/infra/Dockerfile.frontend" \
+  -f "$REPO_ROOT/deploy/Dockerfile.frontend" \
   "$REPO_ROOT/frontend"
 docker push "$ACR_LOGIN_SERVER/frontend:$IMAGE_TAG"
 docker push "$ACR_LOGIN_SERVER/frontend:latest"
@@ -114,7 +114,7 @@ else
     --registry-password "$ACR_PASSWORD" \
     --target-port 3000 \
     --ingress external \
-    --env-vars "PUBLIC_API_BASE_URL=https://$BACKEND_FQDN"
+    --env-vars "PUBLIC_API_URL=https://$BACKEND_FQDN"
 fi
 
 # The FQDN is assigned immediately after create/update. Set ORIGIN in a second

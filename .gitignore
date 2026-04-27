@@ -15,3 +15,11 @@
 .env
 .env.*
 !.env.example
+# Frontend public vars contain no secrets and must be tracked for Vite to load them
+!frontend/.env.development
+!frontend/.env.production
+
+# Local settings
+.claude/settings.local.json
+
+**/LESSONS_LEARNED.md

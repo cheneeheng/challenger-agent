@@ -1,8 +1,273 @@
 # Changelog
 
-All notable changes to this template are documented here.
-
 Format: `[version] YYYY-MM-DD — description`
+
+---
+
+## [1.0.0] 2026-04-27 — IdeaLens v1: full application, test suite, and multi-cloud deployment
+
+First production release. This entry covers all changes relative to the `main` branch (template scaffold). The complete build history is documented in the `[0.x.x]` entries below.
+
+### Application
+
+- **IdeaLens** — LLM-powered idea analysis tool. Describe any idea in natural language; Claude builds a live knowledge graph while you chat. Edit nodes directly, ask follow-up questions, and watch the graph evolve in real time.
+- **Streaming analysis** — `POST /api/chat` returns a `StreamingResponse` with `token`, `graph_action`, `ping`, `error`, and `done` SSE events. A queue-based producer/consumer runs the LLM call and a 15-second heartbeat concurrently. `Last-Event-ID` replay on reconnect.
+- **Live knowledge graph** — Nodes auto-positioned with Dagre layout after each response; animated scale-in transitions on add. 10 dimension types: `concept`, `requirement`, `benefit`, `drawback`, `gap`, `flaw`, `feasibility`, `alternative`, `question`, `root`.
+- **Graph editing** — Add nodes (9 types via modal), delete nodes, drag to reposition (`userPositioned` flag), right-click context menu, connect nodes, auto-layout, delete edges. All edits persisted as system messages.
+- **Node detail panel** — Slide-over showing node content with inline edit and "Ask Claude" pre-fill. Escape to close.
+- **Session persistence** — Graph state (`JSONB`), chat history (including system action messages), and model selection persisted to PostgreSQL. Debounced auto-save on graph changes.
+- **Context window management** — When `session.messages` exceeds `CONTEXT_WINDOW_MAX_MESSAGES` (default 20), oldest messages are summarised with `claude-haiku-4-5` and injected as context on subsequent calls.
+- **Multi-model** — Haiku (fast), Sonnet (default), Opus (thorough). Model IDs configurable via `ALLOWED_CLAUDE_MODELS_RAW`.
+- **Inline session rename** — Double-click session title in `AppHeader` to rename.
+- **Delete-with-undo toast** — Session deletions on the dashboard are reversible within a short window.
+
+### Backend (`backend/app/`)
+
+- **Auth** — JWT access tokens (15 min) + httpOnly refresh cookie (7 days, scoped to `/auth`). Refresh tokens stored in DB for revocation. bcrypt password hashing. `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`.
+- **Users** — Profile update, password change, Anthropic API key management (Fernet-encrypted at rest, validated against Anthropic API on save), account deletion (`DELETE /users/me`).
+- **Sessions** — Full CRUD (`GET`, `POST`, `PATCH`, `DELETE`), graph state `PUT`, and `POST /sessions/{id}/messages` for system message persistence. Rate-limited at 60 req/min. `SELECT MAX ... FOR UPDATE` prevents `message_index` races.
+- **LLM service** — `build_messages`, `stream_with_heartbeat`, `parse_llm_response`, `summarize_messages`, `persist_messages`. Structured `LLMResponse` with `graph_actions` array; each action validated against a Pydantic discriminated union (`add`, `update`, `delete`, `connect`).
+- **Database** — SQLAlchemy 2 async (`asyncpg`), `expire_on_commit=False`. Four models: `User`, `RefreshToken`, `Session` (JSONB `graph_state`), `Message` (`metadata_` avoids SQLAlchemy reserved-name conflict). Alembic async migrations.
+- **Security** — Fernet encryption for API keys. SlowAPI rate limiting. CORS configured from `FRONTEND_URLS_RAW`. Security headers middleware.
+- **Config** — pydantic-settings v2 `Settings` with `get_settings()` lru_cache. List fields use `_RAW` suffix + `@property` to work around pydantic-settings JSON-decoding before validators run.
+- **Neon support** — SSL auto-enabled when `neon.tech` appears in `DATABASE_URL`. Refresh cookie `samesite=lax` for cross-origin Railway/Vercel setup.
+- **`backend/railway.toml`** — Railway service configuration for direct repo deploy.
+
+### Frontend (`frontend/src/`)
+
+- **SvelteKit 2 + Svelte 5 runes** — `$props()`, `$state()`, `$derived()`, `{@render ...}`. SPA mode (`ssr = false`). TailwindCSS 4 via Vite plugin (no `tailwind.config.js`). TypeScript strict.
+- **Routes** — `login/`, `register/`, `(protected)/` (auth guard), `(protected)/settings/` (profile, API key, password, account deletion), `(protected)/(requires-api-key)/` (API key guard), `(protected)/(requires-api-key)/+page.svelte` (dashboard), `(protected)/(requires-api-key)/session/[id]/` (workspace).
+- **Stores** — `authStore` (localStorage persistence), `chatStore` (streaming state), `graphStore` (`applyGraphActions`, `getSnapshot`, `highlightedNodeIds`, `fitViewSignal`), `sessionStore` (CRUD + debounced save).
+- **Services** — `api.ts` (Axios + Bearer interceptor + 401 auto-refresh), `authService`, `userService`, `sessionService`, `chatService`.
+- **Graph** — `GraphPanel.svelte` (@xyflow/svelte controlled flow), `GraphToolbar.svelte`, `NodeDetailPanel.svelte`, `AnalysisNodeComponent.svelte` (per-type colour + `node-pulse` animation), `AddNodeModal.svelte`, `FitViewEffect.svelte` (calls `fitView()` inside flow tree context).
+- **Schemas** — Zod schemas for graph types and all four LLM graph action branches. Validated on every `applyGraphActions` call.
+- **Utils** — `graphLayout.ts` (Dagre, respects `userPositioned`), `graphStyles.ts`, `debounce.ts`, `graphGuards.ts`.
+- **Vercel adapter** — `@sveltejs/adapter-vercel` conditionally applied when `VERCEL=1` is set at build time; falls back to `adapter-node` for Docker/self-hosted.
+- **Error boundaries** — `<svelte:boundary>` in session workspace; `+error.svelte` for 404/500.
+
+### Testing
+
+- **Backend** — 104 pytest tests, 99% coverage. NullPool per-test async engine with SAVEPOINT transaction isolation. Tests: `test_auth`, `test_users`, `test_sessions`, `test_chat`, `test_services`, `test_schemas`.
+- **Frontend unit** — 81 Vitest tests: `graphStore` (21), `chatStore` (11), Zod schemas (19 incl. all 10 dimension types + 4 LLM action branches), `graphLayout` (6), `debounce` (4), `graphGuards`, `chatService`.
+- **E2E** — 5 Playwright tests (Chromium). `auth.spec.ts`: register-and-redirect, login, logout, duplicate-email. `user-journey.spec.ts`: full happy-path — register → set API key → create analysis → interact with graph → send follow-up → edit node → navigate to settings → delete account.
+- **Deploy scripts** — 9 bash tests: Dockerfile syntax (`docker build --check`), required-variable enforcement for all three deploy scripts.
+- **CI** — GitHub Actions: `backend-tests`, `backend-lint` (ruff), `frontend-build` (svelte-check + tsc + vite build), `frontend-tests` (vitest), `deploy-scripts` jobs. Triggers: push to `main`/`feat/**`/`fix/**` + PR + `workflow_dispatch`.
+
+### Infrastructure & Deployment
+
+- **Railway + Vercel + Neon** (`deploy/railway/README.md`) — Lowest-ops path. Backend via `railway.toml`, frontend via `@sveltejs/adapter-vercel`, database via Neon managed PostgreSQL. Step-by-step guide included.
+- **AWS Terraform** (`deploy/aws/terraform/`) — EC2 t4g.small (ARM/Graviton2) + Nginx + Let's Encrypt, S3 + CloudFront SPA, RDS db.t3.micro PostgreSQL 16 in private subnet, ECR (ARM64, lifecycle 10 images), Secrets Manager. Seven child modules: `cloudfront`, `ec2`, `ecr`, `networking`, `rds`, `s3`, `secrets`. Bootstrap module for remote state. Estimated ~$26/month.
+- **AWS deploy script** (`deploy/aws/deploy.sh`) — Builds ARM64 image via `docker buildx`, pushes to ECR, deploys to EC2 via SSM, builds SPA locally, syncs to S3, invalidates CloudFront.
+- **GCP Cloud Run** / **Azure Container Apps** — Deploy scripts in `deploy/gcp/` and `deploy/azure/`.
+- **Docker** — Multi-stage `Dockerfile.backend` (uv, ARM64-capable) and `Dockerfile.frontend` (Bun builder → Node runner). `docker-compose.dev.yml` for local PostgreSQL dev. `docker-compose.yaml` for full self-hosted stack.
+- **Devcontainer** — Ubuntu 24.04, Python 3.12, Node 24, Bun, Claude Code CLI. External `backend` Docker network for direct postgres connectivity. `~/.claude` bind mount for persistent auth.
+
+---
+
+## [0.4.0] 2026-04-26 — Terraform AWS infrastructure, deploy restructure, infra → deploy migration
+
+### Added
+- **`deploy/aws/terraform/`** — Full Terraform module set for AWS. Provisions EC2 t4g.small (ARM/Graviton2) with Nginx + Let's Encrypt for the API, S3 + CloudFront for the SvelteKit SPA, RDS db.t3.micro PostgreSQL 16 in a private subnet, ECR repository (ARM64 images, lifecycle retaining last 10), and Secrets Manager entries. Estimated cost ~$26/month.
+- **`deploy/aws/terraform/bootstrap/`** — One-time bootstrap that creates the S3 bucket and DynamoDB table for remote Terraform state. Run once per AWS account.
+- **`deploy/aws/terraform/modules/`** — Seven Terraform child modules: `cloudfront`, `ec2`, `ecr`, `networking`, `rds`, `s3`, `secrets`.
+- **`deploy/aws/terraform/terraform.tfvars.example`** — Reference variable file documenting all required Terraform inputs (domain, secrets, key pair name, etc.).
+- **`deploy/Dockerfile.backend`** — Backend Dockerfile moved from `infra/` to `deploy/`. Builds ARM64 API image for EC2 deployment.
+- **`deploy/Dockerfile.frontend`** — Frontend Dockerfile moved from `infra/` to `deploy/`.
+- **`deploy/docker-compose.dev.yml`** — Dev compose file moved from `infra/` to `deploy/`.
+- **`deploy/docker-compose.yaml`** — Production compose file moved from `infra/` to `deploy/`.
+
+### Changed
+- **`deploy/aws/deploy.sh`** — Major overhaul. Replaced App Runner target with EC2+S3+CloudFront architecture. Now builds ARM64 Docker image via `docker buildx`, pushes to ECR, deploys to EC2 via SSM, builds the SvelteKit SPA locally, syncs to S3, and invalidates the CloudFront distribution. Required env vars updated: `APPRUNNER_ECR_ROLE_ARN`/`DATABASE_URL`/`JWT_SECRET`/`API_KEY_ENCRYPTION_KEY` replaced with `ECR_REGISTRY`, `EC2_INSTANCE_ID`, `S3_BUCKET`, `CF_DISTRIBUTION_ID`, and `API_URL` (all sourced from Terraform outputs).
+- **`deploy/aws/README.md`** — Rewritten to document the Terraform-based EC2+S3+CloudFront architecture. Covers bootstrap, variable configuration, `terraform apply`, and the `deploy.sh` flow.
+- **`deploy/azure/deploy.sh`** — Updated `PUBLIC_API_URL` build arg reference.
+- **`deploy/gcp/deploy.sh`** — Updated `PUBLIC_API_URL` build arg reference.
+- **`deploy/tests/test_deploy_scripts.sh`** — Updated path references to reflect Dockerfile relocation from `infra/` to `deploy/`.
+- **`deploy/README.md`** — Updated to reflect new `deploy/` layout and Terraform-based AWS deployment path.
+- **`Makefile`** — `make db` and `make db-stop` updated to reference `deploy/docker-compose.dev.yml` instead of `infra/docker-compose.dev.yml`.
+- **`README.md`** — Project structure and deployment section updated to reflect `deploy/` consolidation.
+
+### Removed
+- **`infra/`** — Entire directory deleted. All files relocated to `deploy/`: `Dockerfile.backend`, `Dockerfile.frontend`, `docker-compose.dev.yml`, `docker-compose.yaml`, `README.md`.
+
+---
+
+## [0.3.6] 2026-04-26 — E2E test suite, graph context menu, node animations, dashboard polish
+
+### Added
+- **`frontend/playwright.config.ts`** — Playwright configuration targeting Chromium with `baseURL http://localhost:5173` and a `webServer` block that starts `bun run dev` automatically before the test run.
+- **`frontend/e2e/helpers.ts`** — Shared E2E utilities: `buildSSEBody()` for constructing streaming request payloads and `registerUser()` for creating a test account in setup/teardown.
+- **`frontend/e2e/auth.spec.ts`** — 4 Playwright tests covering the full auth surface: register-and-redirect, login, logout, and duplicate-email error handling.
+- **`frontend/e2e/user-journey.spec.ts`** — 1 comprehensive happy-path test: register → set API key → create analysis → interact with graph → send follow-up → edit node → navigate to settings → delete account.
+- **`frontend/e2e/tsconfig.json`** — TypeScript config scoped to the `e2e/` directory so Playwright's globals type-check correctly without polluting the main frontend tsconfig.
+- **`frontend/src/lib/components/graph/FitViewEffect.svelte`** — New component that calls `fitView()` from inside the SvelteFlow provider context, working around the constraint that `useNodes`/`useSvelteFlow` hooks must be invoked inside the flow tree.
+- **`frontend/src/lib/components/graph/GraphPanel.svelte`** — Right-click context menu via `onnodecontextmenu`; edge persistence via `onconnect` handler that writes new edges to `graphStore`.
+- **`frontend/src/lib/components/graph/nodes/AnalysisNodeComponent.svelte`** — `node-pulse` CSS keyframe animation triggered via `highlightedNodeIds` store when the LLM adds or updates a node.
+- **`frontend/src/lib/components/layout/AppHeader.svelte`** — Inline session rename on double-click, model badge display, and logout action.
+- **`frontend/src/lib/stores/graphStore.ts`** — `highlightedNodeIds` set, `fitViewSignal` derived store, `deleteEdge` action, and Zod validation on `applyGraphActions` LLM payloads.
+- **`frontend/src/routes/(protected)/(requires-api-key)/+page.svelte`** — Delete-with-undo toast, loading skeleton, and full session CRUD wiring.
+- **`backend/app/api/routes/sessions.py`** — Rate limits (`60/minute`) applied to all session routes including the `add_message` endpoint introduced in 0.3.5.
+
+### Changed
+- **`frontend/package.json`** — Added `@playwright/test` devDependency; added `test:e2e` and `test:e2e:ui` scripts.
+- **`CLAUDE.md`** — Corrected stale `sudo service postgresql start` → `make db` (Docker-based); added `make db`, `make db-stop`, `make db-migrate` command entries; added `test:e2e` and `test:e2e:ui` to frontend commands; updated frontend architecture tree with `FitViewEffect.svelte` and the `e2e/` directory.
+- **`README.md`** — Updated E2E test count to 5 tests, added run instructions, listed `e2e/` in project structure, added `test:e2e` to commands table.
+
+### Docs
+- **`docs/plan/02_TODOS.md`** — Task 5.5 (E2E Playwright) marked complete `[x]`.
+- **`docs/claude_logs/DECISION_LOG.md`** — Added Entry 019 documenting E2E test design decisions (Chromium-only, `webServer` integration, helper extraction).
+
+---
+
+## [0.3.5] 2026-04-19 — System message persistence, node entry animation, CI hardening
+
+### Added
+- **`backend/app/api/routes/sessions.py`** — New `POST /api/sessions/{session_id}/messages` endpoint. Accepts `{ role: "system", content: "..." }` and appends a `Message` row with a correctly sequenced `message_index` (uses `SELECT MAX ... FOR UPDATE` to prevent races). 403 on wrong user, 404 on missing session.
+- **`backend/app/schemas/chat.py`** — `AddMessageRequest` schema with a `@field_validator` that restricts `role` to `"system"`, preventing clients from injecting `user` or `assistant` messages via this endpoint.
+- **`backend/tests/test_sessions.py`** — 6 new tests: happy-path 201 and message appears in GET, default role, invalid role → 422, not found → 404, forbidden → 403, sequential `message_index` increment.
+- **`frontend/src/lib/services/sessionService.ts`** — `addSystemMessage(sessionId, content)` — thin wrapper around `POST /api/sessions/{id}/messages` used for fire-and-forget system message persistence.
+- **`frontend/src/lib/components/graph/nodes/AnalysisNodeComponent.svelte`** — `in:scale={{ duration: 200, start: 0.85 }}` transition on the node wrapper `<div>`. Nodes now scale in smoothly when Claude adds them to the graph.
+- **`.github/workflows/ci.yaml`** — New `deploy-scripts` CI job that runs `bash deploy/tests/test_deploy_scripts.sh` (9 tests: syntax checks, required-variable enforcement, Dockerfile verification) on every push and pull request.
+
+### Changed
+- **`frontend/src/routes/(protected)/(requires-api-key)/session/[id]/+page.svelte`** — `handleSystemMessage` now calls `addSystemMessage` (fire-and-forget, failure is silent) after adding the message to `chatStore`, so node-edit and node-delete system messages survive page reload.
+- **`.github/workflows/ci.yaml`** — Changed trigger from `workflow_dispatch`-only to `push` (branches: `main`, `feat/**`, `fix/**`) + `pull_request` + `workflow_dispatch`. CI now runs automatically on every push and PR instead of only when manually triggered.
+
+### Fixed
+- **`frontend/src/lib/services/chatService.test.ts`** — Pre-existing `svelte-check` error: `vi.mock` factory used CommonJS `require('svelte/store')`, which is invalid in an ESM context. Converted to `async () => { const { writable } = await import('svelte/store') }`. `svelte-check` now reports 0 errors/warnings.
+
+### Docs
+- **`docs/plan/02_TODOS.md`** — Complete re-audit against the live codebase. All completed items marked `[x]`, deferred or N/A items marked `[-]` with an inline reason (e.g. Add Edge, right-click menu, Terraform/ECS, E2E Playwright), remaining open items left `[ ]`. Rate limiting, SSE reconnection, system message persistence, node entry animation, and deploy script testing all marked `[x]`.
+- **`README.md`** — Version bump 0.3.4 → 0.3.5. Features section updated (system message persistence, entry animation). Test coverage counts updated (104 backend, 81 frontend, 9 deploy). "What's not yet built" trimmed to genuinely unbuilt items only. Backend test note clarifies PostgreSQL requirement. Deploy test command added.
+
+---
+
+## [0.3.4] 2026-04-16 — AWS infrastructure setup, deploy script overhaul, .env sourcing
+
+### Added
+- **`deploy/aws/setup-infra.sh`** — One-time idempotent script that provisions the AWS infrastructure needed before a first deploy: RDS PostgreSQL 16 (private, `db.t3.micro`, 7-day backups) in the default VPC; a security group allowing port 5432 from the VPC CIDR; an RDS subnet group; an App Runner VPC connector so the backend service has egress to the private database; and Secrets Manager entries for `DATABASE_URL`, `JWT_SECRET`, and `API_KEY_ENCRYPTION_KEY`. Prints the `VPC_CONNECTOR_ARN` and `DATABASE_URL` values to add to `.env`.
+- **`deploy/aws/README.md`** — Full AWS deployment procedure: IAM role creation, step-by-step first deploy (setup-infra → migrations → deploy), subsequent deploy flow, Secrets Manager promotion path, notes on `PUBLIC_API_URL` build-time compilation and CORS.
+
+### Changed
+- **`deploy/aws/deploy.sh`** — Major overhaul. Now sources root `.env` automatically (no manual exports needed). Added `DATABASE_URL`, `JWT_SECRET`, `API_KEY_ENCRYPTION_KEY` as required vars and optional `VPC_CONNECTOR_ARN`. Fixed `APP_ENV` → `ENVIRONMENT`. Build order corrected: backend builds and deploys first, then frontend image is built with `--build-arg PUBLIC_API_URL=https://$BACKEND_URL` so Vite compiles the correct backend URL into the bundle. `FRONTEND_URLS_RAW` defaults to the deployed frontend URL and is set on the backend in a second pass. `PUBLIC_API_URL` removed from runtime env vars (it is baked into the image at build time).
+- **`infra/Dockerfile.frontend`** — Added `ARG PUBLIC_API_URL` and `ENV PUBLIC_API_URL=$PUBLIC_API_URL` before `bun run build`. Vite picks this up via `$env/static/public`, allowing the backend URL to be injected at image build time rather than being hardcoded in the repo.
+- **`.github/workflows/deploy-aws.yaml`** — Removed duplicate build steps (the old workflow built images in the workflow *and* in `deploy.sh`). Workflow now solely configures AWS credentials and runs `deploy.sh`. Added `DATABASE_URL`, `JWT_SECRET`, `API_KEY_ENCRYPTION_KEY`, `VPC_CONNECTOR_ARN` secrets. Removed `AWS_ACCOUNT_ID` (obtained via `sts get-caller-identity` in the script). Image tag computed as short SHA via a dedicated step.
+- **`.env.example`** — Added `# --- AWS Deploy ---` section with `APP_NAME`, `AWS_REGION`, `APPRUNNER_ECR_ROLE_ARN`, `DB_PASSWORD`, and `VPC_CONNECTOR_ARN` so all deployment config lives in one file.
+- **`deploy/aws/setup-infra.sh`** (and `deploy.sh`) — Both scripts source the root `.env` at startup using `set -o allexport` + `source` with comment/blank-line stripping, so no manual `export` calls are needed before running them.
+
+### Docs
+- **`deploy/README.md`** — Quick-start simplified to "fill in `.env` and run the script". AWS secrets list corrected (removed `AWS_ACCOUNT_ID`, added `DATABASE_URL`/`JWT_SECRET`/`API_KEY_ENCRYPTION_KEY`/`VPC_CONNECTOR_ARN`). "Adding a database" section updated: AWS handled by `setup-infra.sh`, GCP/Azure instructions remain. Terraform note updated to reflect that AWS networking complexity is now handled.
+- **`infra/README.md`** — `Dockerfile.frontend` entry notes the `PUBLIC_API_URL` build arg.
+- **`README.md`** — Project tree updated to show `deploy/aws/` subdirectory with all three files. Deployment section simplified to point to `deploy/README.md`.
+
+---
+
+## [0.3.3] 2026-04-16 — Consolidate env files and move docker-compose to infra
+
+### Changed
+- **`.env.example`** — Merged root and `backend/.env.example` into a single file at the repo root. Corrected `FRONTEND_URLS` → `FRONTEND_URLS_RAW` to match the actual pydantic-settings field name. Added an inline note explaining that frontend public vars live in `frontend/.env.*` and why they cannot move (Vite requires env files alongside `vite.config.ts`).
+- **`backend/app/core/config.py`** — `env_file` changed from `".env"` to `("../.env", ".env")` so the backend resolves the root-level `.env` whether invoked from `backend/` or the repo root, with a local fallback for convenience.
+- **`docker-compose.yml` → `infra/docker-compose.dev.yml`** — Moved the postgres-only dev compose from the repo root into `infra/`. Fixed the init-SQL volume path from `./docker/postgres/init.sql` to `../docker/postgres/init.sql` to reflect the new location.
+- **`Makefile`** — Updated `make db` and `make db-stop` to pass `-f infra/docker-compose.dev.yml`.
+- **`.gitignore`** — Added explicit `!frontend/.env.development` and `!frontend/.env.production` negations so these non-secret public-var files are tracked despite the broad `.env.*` ignore rule.
+
+### Fixed
+- **`deploy/aws/deploy.sh`, `deploy/gcp/deploy.sh`, `deploy/azure/deploy.sh`** — All three scripts were setting `PUBLIC_API_BASE_URL` but the frontend reads `PUBLIC_API_URL` (imported via `$env/static/public` in `src/lib/config.ts`). Renamed to `PUBLIC_API_URL` so the deployed frontend actually receives the backend URL.
+
+### Removed
+- **`backend/.env.example`** — Deleted; superseded by the consolidated root `.env.example`.
+
+### Docs
+- **`README.md`** — Updated quick-start `cp` command to `cp .env.example .env`. Added `ORIGIN` to the env vars table. Updated project tree to show `infra/docker-compose.dev.yml` instead of the root `docker-compose.yml`.
+- **`deploy/README.md`** — Replaced duplicated env vars table with a reference to the root README. Updated env var names to match actual settings (`APP_ENV` → `ENVIRONMENT`, `SECRET_KEY` → `JWT_SECRET`, `CORS_ORIGINS` → `FRONTEND_URLS_RAW`, `PUBLIC_API_BASE_URL` → `PUBLIC_API_URL`).
+- **`infra/README.md`** — Added `docker-compose.dev.yml` entry to the file table.
+- **`backend/README.md`** — Fixed commands to use `uv run` prefix. Added env file loading note.
+- **`frontend/README.md`** — Replaced scaffolded SvelteKit boilerplate with project-specific commands and env file guidance.
+
+---
+
+## [0.3.2] 2026-04-10 — Workspace rename to challenger-agent and external Docker network
+
+### Changed
+- **`.devcontainer/Dockerfile`** — Renamed `/workspace` to `/challenger-agent` as the container working directory. Updated `PYTHONPATH` to `/challenger-agent/backend` to match.
+- **`.devcontainer/devcontainer.json`** — Added `runArgs: ["--network=backend"]` so the devcontainer joins the external `backend` Docker network, enabling direct connectivity to the postgres container running via `docker-compose.yml`.
+- **`.vscode/settings.json`** — Updated `PYTHONPATH`, `python.defaultInterpreterPath`, and `ruff.interpreter` from `/workspace/...` to `/challenger-agent/...` to match the Dockerfile path rename.
+- **`docker-compose.yml`** — Attached the `postgres` service to an external Docker network named `backend`. Added the `networks` section declaring `backend` as `external: true` so the devcontainer and compose services share a network namespace.
+- **`backend/pyproject.toml`** — Bumped version to `0.3.2`. Changed license field from a classifier string to SPDX `license = "Apache-2.0"`. Added `[tool.setuptools.packages.find]` with `include = ["app"]` and `exclude = ["alembic"]` to scope package discovery correctly.
+- **`frontend/package.json`** — Bumped version to `0.3.2`.
+- **`README.md`** — Added `Version: 0.3.2` line.
+
+---
+
+## [0.3.1] 2026-04-05 — Bug fixes, test coverage to 99%, and frontend unit tests
+
+### Fixed
+- **`backend/tests/conftest.py`** — Test `AsyncSession` was missing `expire_on_commit=False`, which the production `AsyncSessionLocal` has. The divergence caused `MissingGreenlet` errors in `test_chat_context_summarization` (the only test that triggered `db.commit()` mid-request). Added `expire_on_commit=False` to match production behaviour.
+- **`backend/app/api/routes/chat.py`** — `messages`, `context_summary`, and `context_summary_covers_up_to` are now captured into local Python variables before `db.commit()`. This prevents expired-attribute lazy loads when `build_messages` accesses those values after the commit inside the `StreamingResponse` generator.
+- **`backend/pyproject.toml`** — Removed `"asyncio"` from `[tool.coverage.run] concurrency`. `asyncio` is not a valid coverage.py concurrency option; its presence caused `ConfigError: Unknown concurrency choices: asyncio` and crashed pytest on startup.
+
+### Added
+- **`frontend/src/lib/stores/graphStore.test.ts`** — 21 vitest unit tests covering all graphStore mutation methods (`addNode`, `updateNode`, `deleteNode`, `addEdge`, `deleteEdge`, `setNodePosition`, `setGraph`, `clearGraph`, `getSnapshot`) and all four `applyGraphActions` action types (`add`, `update`, `delete`, `connect`), including edge cases (duplicate IDs, protected root node, duplicate edges).
+- **`frontend/src/lib/stores/chatStore.test.ts`** — 11 vitest unit tests covering `addMessage`, `setMessages`, `appendToken` (streaming and non-streaming targets), `finalizeMessage`, `setStreaming`, `setError`, and `clear`.
+- **`frontend/src/lib/utils/debounce.test.ts`** — 4 vitest unit tests with fake timers verifying the trailing-call debounce contract.
+- **`frontend/src/lib/utils/graphLayout.test.ts`** — 6 vitest unit tests for `applyDagreLayout`: node count preserved, `userPositioned` nodes kept at their coordinates, non-user-positioned nodes receive Dagre-assigned positions, empty graph handled, edges involving user-positioned nodes skipped.
+- **`frontend/src/lib/schemas/graph.test.ts`** — 19 vitest unit tests for all Zod schemas: `dimensionTypeSchema` (all 10 valid types + rejection), `analysisNodeSchema` (default `userPositioned`, required fields, numeric score), `analysisEdgeSchema` (minimal + optional fields), `analysisGraphSchema`, `llmGraphActionSchema` (all 4 discriminated union branches + rejection).
+
+### Changed
+- **`docs/plan/02_TODOS.md`** — Full audit against implemented code. All completed backend and SvelteKit tasks marked `[x]`, React-only tasks marked `[-]` (N/A), remaining items left `[ ]` with accurate descriptions.
+- **`README.md`** — Complete rewrite to reflect IdeaLens application. Covers features, quick start, environment variables, command reference, annotated project structure, test coverage stats, architecture notes (streaming, graph actions, context management, API key security, auth), and a "what's not yet built" section pointing to `docs/plan/02_TODOS.md`.
+
+---
+
+## [0.3.0] 2026-04-04 — IdeaLens application: full backend and frontend implementation
+
+### Added
+
+#### Backend
+- **`backend/app/core/config.py`** — Rebuilt as pydantic-settings v2 `Settings` with `get_settings()` lru_cache. List fields (`FRONTEND_URLS`, `ALLOWED_CLAUDE_MODELS`) are stored as `_RAW` string env vars and exposed via `@property` to work around pydantic-settings v2 JSON-decoding list fields before validators run.
+- **`backend/app/db/models/`** — Four SQLAlchemy ORM models: `User`, `RefreshToken`, `Session` (with JSONB `graph_state`), `Message` (using `metadata_` to avoid SQLAlchemy reserved-name conflict).
+- **`backend/app/db/base.py`** — Async engine and `AsyncSessionLocal` factory using `asyncpg`.
+- **`backend/app/db/session.py`** — `get_db` async generator dependency with commit/rollback.
+- **`backend/app/services/auth_service.py`** — JWT access/refresh tokens and bcrypt password hashing.
+- **`backend/app/services/encryption_service.py`** — Fernet symmetric encryption for storing user API keys at rest.
+- **`backend/app/services/llm_service.py`** — `build_messages`, `stream_with_heartbeat`, `parse_llm_response`, `summarize_messages`, `persist_messages`. Handles streaming SSE, graph action extraction from LLM output, and context window management via summarisation.
+- **`backend/app/schemas/`** — Pydantic schemas for `auth`, `user`, `session`, `chat`, `graph`, `models`.
+- **`backend/app/dependencies/auth.py`** — `get_current_user` FastAPI dependency.
+- **`backend/app/api/routes/auth.py`** — register, login, token refresh, logout.
+- **`backend/app/api/routes/users.py`** — profile, password change, API key management, account deletion.
+- **`backend/app/api/routes/sessions.py`** — session CRUD and graph state PUT.
+- **`backend/app/api/routes/chat.py`** — SSE streaming endpoint with reconnection support.
+- **`backend/app/api/routes/models.py`** — public listing of allowed Claude model IDs.
+- **`backend/app/prompts/analysis_system.py`** — Full v1.0 system prompt for IdeaLens idea analysis.
+- **`backend/alembic/`** — Async Alembic configuration (`env.py`, `script.py.mako`) and initial schema migration (`f965869e64a3_initial_schema`) covering all four tables. Migration has been applied.
+- **`backend/.env.example`** — Reference file documenting all required environment variables.
+
+#### Frontend
+- **`frontend/src/app.css`** — Tailwind import and custom scrollbar styles.
+- **`frontend/src/lib/config.ts`** — `API_BASE_URL` sourced from `PUBLIC_API_URL`.
+- **`frontend/src/lib/schemas/graph.ts`** — Zod schemas for graph node/edge types and LLM graph actions.
+- **`frontend/src/lib/stores/`** — Four Svelte stores: `authStore` (with localStorage persistence), `chatStore` (streaming message state), `graphStore` (`applyGraphActions`, `getSnapshot`), `sessionStore` (session CRUD with debounced graph save).
+- **`frontend/src/lib/services/`** — `api.ts` (Axios instance with Bearer interceptor and 401 auto-refresh), `authService.ts`, `userService.ts`, `sessionService.ts`, `chatService.ts`.
+- **`frontend/src/lib/utils/`** — `graphLayout.ts` (Dagre auto-layout, respects `userPositioned` flag), `graphStyles.ts` (colour/label map per `DimensionType`), `debounce.ts`.
+- **`frontend/src/routes/+layout.ts`** — SPA mode (`ssr = false`, `prerender = false`).
+- **`frontend/src/routes/login/+page.svelte`** and **`register/+page.svelte`** — Auth forms.
+- **`frontend/src/routes/(protected)/+layout.ts`** — Auth guard redirecting unauthenticated users to `/login`.
+- **`frontend/src/routes/(protected)/settings/+page.svelte`** — Profile, API key, password, and danger-zone (account deletion) settings.
+- **`frontend/src/routes/(protected)/(requires-api-key)/+layout.ts`** — Guard redirecting users without an API key to settings.
+- **`frontend/src/routes/(protected)/(requires-api-key)/+page.svelte`** — Dashboard with session list and New Analysis modal.
+- **`frontend/src/routes/(protected)/(requires-api-key)/session/[id]/+page.svelte`** — Workspace with auto-send on load, streaming chat, and live graph action processing.
+- **`frontend/src/lib/components/layout/`** — `AppHeader.svelte` (inline session rename), `SplitLayout.svelte` (svelte-splitpanes 40/60 split).
+- **`frontend/src/lib/components/chat/`** — `ChatPanel.svelte`, `ChatInput.svelte`, `MessageBubble.svelte`, `ModelSelector.svelte`.
+- **`frontend/src/lib/components/graph/`** — `GraphPanel.svelte` (@xyflow/svelte controlled flow), `GraphToolbar.svelte` (auto-layout trigger), `NodeDetailPanel.svelte` (slide-over with edit/delete), `nodes/AnalysisNodeComponent.svelte` (custom node styled by `DimensionType`).
+
+### Changed
+- **`backend/app/main.py`** — Rewrote with `create_app()` factory, correct middleware order (CORS then SecurityHeaders), slowapi rate limiter, and lifespan DB connectivity check.
+- **`frontend/src/routes/+layout.svelte`** — Added `<Toaster>` and `authStore.init()` call.
+- **`frontend/svelte.config.js`** — Added `vitePreprocess()`.
+- **`frontend/vite.config.ts`** — Configured `server.host` and `server.port` (5173).
+- **`frontend/package.json`** — Added dependencies: `@xyflow/svelte`, `@dagrejs/dagre`, `zod`, `axios`, `svelte-sonner`, `svelte-splitpanes`, `lucide-svelte`, `date-fns`, `uuid`.
+
+### Removed
+- **`frontend/src/routes/+page.svelte`** — Deleted; the dashboard now lives at `(protected)/(requires-api-key)/+page.svelte`.
 
 ---
 

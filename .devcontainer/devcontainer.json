@@ -1,28 +1,33 @@
 {
-  "name": "FastAPI + SvelteKit Dev",
+  "name": "Challenger Agent",
 
   "build": {
     // Path is relative to the devcontainer.json file.
     "dockerfile": "Dockerfile",
-    "options": ["--tag=fastapi-sveltekit-dev:latest"]
+    "options": ["--tag=challenger-agent-dev:260404"]
   },
 
+
+  "runArgs": ["--network=backend"],
+
   "containerEnv": {
-    "UV_CACHE_DIR": "/workspace/.uv-cache"
+    "UV_CACHE_DIR": "/${localWorkspaceFolderBasename}/.uv-cache"
   },
 
   // Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
   "remoteUser": "ubuntu",
 
   "mounts": [
-    "source=${localEnv:USERPROFILE}/.gemini,target=/home/ubuntu/.gemini,type=bind",
-    "source=${localEnv:USERPROFILE}/.claude,target=/home/ubuntu/.claude,type=bind"
+    // "source=${localEnv:USERPROFILE}/.gemini,target=/home/ubuntu/.gemini,type=bind",
+    "source=${localEnv:USERPROFILE}/.claude_devcontainer,target=/home/ubuntu/.claude,type=bind",
+    "source=${localEnv:USERPROFILE}/.ssh,target=/home/ubuntu/.ssh,type=bind"
   ],
 
   // This is where your source code will be mounted.
-  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
-  "workspaceFolder": "/workspace",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/${localWorkspaceFolderBasename},type=bind",
+  "workspaceFolder": "/${localWorkspaceFolderBasename}",
 
+  "postCreateCommand": "git config --local gpg.ssh.allowedSignersFile ~/.ssh/allowed_signers && git config --local user.signingkey ~/.ssh/id_ed25519.pub",
   "postStartCommand": "uv sync --directory backend --no-install-project --all-extras && bun install --cwd frontend",
 
   "forwardPorts": [8000, 5173],

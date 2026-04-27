@@ -18,6 +18,7 @@ on:
 
 jobs:
   deploy:
+    if: false  # disabled — re-enable by removing this line
     runs-on: ubuntu-latest
     env:
       GCP_PROJECT: ${{ secrets.GCP_PROJECT }}

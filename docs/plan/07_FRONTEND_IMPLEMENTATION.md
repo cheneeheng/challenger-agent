@@ -1,6 +1,23 @@
+---
+doc: 07_FRONTEND_IMPLEMENTATION
+status: ready
+version: 1
+created: 2026-04-18
+scope: React + Vite + TypeScript implementation patterns — bootstrap, stores, Axios, SSE client, Zod schemas, React Flow, route tree
+relates_to:
+  - 03_ARCHITECTURE
+  - 04_LIBRARIES_AND_FRAMEWORKS
+  - 06_BACKEND_IMPLEMENTATION
+  - 07_FRONTEND_IMPLEMENTATION_SVELTE
+---
 # FRONTEND IMPLEMENTATION REFERENCE
-> Authoritative implementation guide for the React + Vite + TypeScript frontend.
-> Claude Code: read this before implementing any frontend component.
+
+Claude Code: read this before implementing any frontend component.
+
+**Stack:** React 19 · Vite · TypeScript · Zustand · React Flow (@xyflow/react) · Axios · Zod · TanStack Query · Tailwind CSS
+
+> This is the React implementation. The SvelteKit equivalent is in 07_FRONTEND_IMPLEMENTATION_SVELTE.md.
+> Both share the same backend. Only one is deployed to production at a time (controlled by DEPLOY_FRONTEND).
 
 ---
 

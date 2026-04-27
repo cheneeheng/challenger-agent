@@ -2,10 +2,6 @@ name: Deploy (Railway + Vercel)
 
 on:
   workflow_dispatch:
-    inputs:
-      image_tag:
-        description: "Image tag (leave blank to use the short commit SHA)"
-        required: false
 
 # Required repository secrets (Settings → Secrets and variables → Actions):
 #   RAILWAY_TOKEN              — Railway account token (Account → Tokens → New Token)

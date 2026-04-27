@@ -1,6 +1,14 @@
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response, status
+from fastapi import (
+    APIRouter,
+    Cookie,
+    Depends,
+    HTTPException,
+    Request,
+    Response,
+    status,
+)
 from jose import JWTError
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -11,7 +19,11 @@ from app.core.config import get_settings
 from app.db.models.refresh_token import RefreshToken
 from app.db.models.user import User
 from app.db.session import get_db
-from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse, UserResponse
+from app.schemas.auth import (
+    LoginRequest,
+    RegisterRequest,
+    TokenResponse,
+)
 from app.services.auth_service import (
     create_access_token,
     create_refresh_token,
@@ -19,6 +31,7 @@ from app.services.auth_service import (
     verify_password,
     verify_token,
 )
+
 
 router = APIRouter(prefix="/auth")
 limiter = Limiter(key_func=get_remote_address)
@@ -31,7 +44,7 @@ def _set_refresh_cookie(response: Response, token: str) -> None:
         value=token,
         httponly=True,
         secure=settings.ENVIRONMENT == "production",
-        samesite="strict",
+        samesite="lax",
         max_age=60 * 60 * 24 * settings.REFRESH_TOKEN_EXPIRE_DAYS,
         path="/auth",
     )

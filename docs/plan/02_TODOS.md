@@ -356,12 +356,12 @@ relates_to:
 > See `05_INFRASTRUCTURE_AND_DEPLOYMENT_ALT.md` for full execution details.
 
 - [ ] Prerequisites: install Railway CLI (`npm i -g @railway/cli`), Vercel CLI, `pg_dump`/`pg_restore`; create Neon (free), Vercel (free), Railway (Hobby $5/month) accounts
-- [ ] **Step 1 — Neon:** provision project, get pooled connection string, convert to `postgresql+asyncpg://`, add SSL to `backend/app/db/base.py`, run Alembic migrations
+- [x] **Step 1 — Neon (code):** SSL added to `backend/app/db/base.py` (auto-enabled when `neon.tech` in DATABASE_URL); manual: provision project, get pooled connection string, run Alembic migrations
 - [ ] **Step 2 — Data migration** *(skip if fresh)*: dump RDS → restore to Neon
-- [ ] **Step 3 — Railway backend:** `railway init`, create `backend/railway.toml`, set env vars (`DATABASE_URL`, `JWT_SECRET`, `API_KEY_ENCRYPTION_KEY` — reuse existing values to preserve sessions), `railway up`, verify `/health`
-- [ ] **Step 4 — Vercel frontend:** install `@sveltejs/adapter-vercel`, update `svelte.config.js`, deploy, set `PUBLIC_API_URL=https://idealens-production.up.railway.app`, note assigned Vercel URL
-- [ ] **Step 5 — CORS + cookie** *(code changes)*: `samesite="strict"` → `"lax"` in `backend/app/api/routes/auth.py`; set `FRONTEND_URLS` Railway variable to Vercel URL
-- [ ] **Step 6 — CI/CD:** new `deploy.yml` with Railway + Vercel jobs; add `RAILWAY_TOKEN`, `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID_SVELTE` secrets
+- [x] **Step 3 — Railway backend (code):** `backend/railway.toml` created; manual: `railway init`, set env vars, `railway up`, verify `/health`
+- [x] **Step 4 — Vercel frontend (code):** `@sveltejs/adapter-vercel` installed, `svelte.config.js` updated (conditional on `ADAPTER=vercel`), `deploy/railway/README.md` added; manual: `vercel --prod`, set `PUBLIC_API_URL`
+- [x] **Step 5 — CORS + cookie (code):** `samesite="lax"` in `backend/app/api/routes/auth.py`; manual: set `FRONTEND_URLS_RAW` Railway variable to Vercel URL
+- [x] **Step 6 — CI/CD:** `deploy.yml` updated — disabled for now, triggers on `workflow_dispatch`; manual: add `RAILWAY_TOKEN`, `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID_SVELTE` secrets
 - [ ] **Step 7 — Smoke test:** health, register/login, cookie, SSE stream, graph actions, page refresh, CORS preflight
 - [ ] **Step 8 — AWS teardown** *(only after smoke test passes)*: delete EC2 instance, RDS, S3 buckets, CloudFront distribution, ECR repos, Secrets Manager entries, security groups
 
